@@ -201,7 +201,7 @@ def main(args):
     if not cmd:
         if configured():
             print(describe())
-            print("  test | off | always | away [сек]")
+            print("  test | off | always | away [сек] | approve on|off")
             return 0
         return setup()
     if cmd == "setup":
@@ -224,6 +224,9 @@ def main(args):
         write_config(telegram_when="away")
         print(describe())
         return 0
+    if cmd == "approve":
+        import telegram_approve
+        return telegram_approve.main(args[1:])
     if cmd == "test":
         try:
             send("claudemeister: пробное уведомление", "Claude Code", "Так будут выглядеть уведомления, когда ты не за Mac.")
@@ -232,5 +235,5 @@ def main(args):
             return 1
         print("✓ отправлено в Telegram")
         return 0
-    print("claudemeister notify telegram [test | off | always | away [сек]]")
+    print("claudemeister notify telegram [test | off | always | away [сек] | approve on|off]")
     return 2

@@ -479,6 +479,26 @@ from the clipboard and clears it), then press Start in the chat with the bot. Th
 `telegram off` disconnects and deletes the token. If you're looking at Claude's tab but have walked away, the
 notification only goes to Telegram. Send errors are logged to `~/.cache/mnrh/notify/errors.log`.
 
+Permission requests can also be answered from Telegram. `claudemeister notify telegram approve on` turns it on
+(off by default) and adds a blocking `PermissionRequest` hook to `~/.claude/settings.json` (`claudemeister setup`
+installs it too, with a 600-second timeout). When Claude asks for permission and you're away from the Mac, the bot
+sends the project, session title, tool and command or path with "Разрешить" and "Отклонить" buttons, and Claude
+gets your answer. If you come back to the Mac, nobody answers within 9.5 minutes, or Telegram can't be reached,
+the hook exits without a decision and Claude asks in the terminal as usual; the message then says so and loses its
+buttons. While you're at the Mac, the hook exits at once and changes nothing. Questions (`AskUserQuestion`) and
+plan approval stay on the Mac. Only presses from the chat that pressed Start during setup count, and each
+message's buttons carry a random id that is valid for that one request. When the request is already in Telegram
+with buttons, the regular "permission needed" message isn't sent there a second time.
+`claudemeister notify telegram approve off` turns it off.
+
+The trade-off: anyone who can open your Telegram (an unlocked phone, a logged-in Telegram Desktop or web session)
+can allow a command on your Mac, and so can anyone holding the bot token, which sits in the Keychain. The message
+shows at most 600 characters of the command and hides values that look like passwords and tokens, so a long or
+masked command can't be fully read from the phone; the message says so, and then it's safer to deny or wait. An
+"allow" from Telegram doesn't bypass your `deny` rules in Claude Code settings. A request that guard held because
+it touches keys comes with guard's warning, but the button allows it just like the terminal prompt would. Turn it
+on only if your Telegram account has a password and two-step verification.
+
 Or to Tossling on your phone through your own ntfy: `claudemeister notify phone away` when you're away from the
 Mac, `phone always` every time, `phone off` to turn it off, `phone test` for a test. They go to the `claude`
 channel, and questions and permission requests use high priority. On the phone, add the `claude` channel in
