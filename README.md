@@ -19,6 +19,7 @@ claudemeister ... -x         through your own VPS, this session only
 claudemeister ... -i         nothing written to disk: no transcript, no prompt history
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
+claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
 claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
 claudemeister fresh          from inside Claude: new untitled session, this one stays in /resume
@@ -55,6 +56,10 @@ Claude Code deletes transcripts older than `cleanupPeriodDays`, 30 days by defau
 setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If you run `claudemeister` before
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
+
+`claudemeister doctor` checks all of it in one go: Claude Code on PATH, the commands and whether they match this
+version, the hooks, transcript retention, the status line, the MCP server answering `tools/list`, the zsh hook,
+the notification app and the proxy. It exits with 1 when something is broken and says what fixes it.
 
 Update with `brew upgrade claudemeister`. Open sessions pick up the new version on their own: before each
 request the MCP server checks whether its code changed (a `brew upgrade` or a `git pull` in a checkout) and, if
@@ -221,8 +226,12 @@ the images and full long outputs in that old part of the conversation.
 
 The same search is available to Claude as the MCP tools `session_search` and `session_read`. Ask "how did we
 set up RuStore signing in sightra?" and Claude finds it in past sessions and reads the right spot. The index
-covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools) and
-the summaries after `/compact`. Tool outputs and system messages aren't indexed. All words must appear in one
+covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools), the
+errors those tools returned and the summaries after `/compact`. Normal tool output and system messages aren't
+indexed. Of a long error only the first 600 and the last 900 characters are kept, and Claude Code's own refusals
+(permission denied, "read the file first") are skipped. `roles=["error"]` (in the terminal
+`claudemeister sessions search -r error <words>`) searches errors only, to find how the same error was fixed
+before. All words must appear in one
 message (if no message has them all, messages with at least half of them are shown). Case and word form don't
 matter: words are reduced to their stems (a Snowball stemmer for Russian, the first Porter steps for English),
 so `сессия` finds `сессии` and `signing` finds `signed`. Hyphens split words, and a hyphenated word or a phrase in
@@ -262,7 +271,7 @@ cached for 6 hours. Claude gets the same through the `deps_outdated` tool.
 | `/where` | where we left off: git, the last session in this project, backlog, what's next |
 | `/todo` | backlog: `/todo` lists, `/todo <text>` adds, `/todo done 2` marks done |
 | `/release-notes` | "What's new" in Russian and English for fastlane |
-| `/parallel <task>` | the same task in its own branch in a second window; `/parallel list` |
+| `/parallel <task>` | the same task in its own branch in a second window; `--fork` takes this conversation along; `/parallel list` |
 | `/shot <app> [question]` | screenshot of a window that Claude looks at and answers about |
 | `/ask <project> <question>` | an answer from another project by a separate Claude |
 
@@ -310,6 +319,13 @@ project has that file in its root, its patterns (`.gitignore` syntax) pick the f
 are copied, so tracked files are never duplicated. The same file then also works for `claude --worktree` and for
 subagent worktrees. A project without `.worktreeinclude` gets the old list: untracked `local.properties`, `.env*`
 and `fastlane/.env*`, and the reply says so.
+
+`/parallel --fork <task>` (`fork: true` in `parallel_task`, `--fork` on the command line from inside Claude) opens
+the second Claude with a copy of the current conversation, so it knows everything said so far:
+`claude --resume <id> --fork-session` started in the worktree. Claude Code finds a session by id in the
+project's git worktrees, and a fork starts in the folder it was launched from, so the copy works in the worktree
+while the original session stays as it was. Without `--fork` the second Claude starts a new session with only
+the task.
 
 claudemeister keeps creating the worktree itself instead of using `claude --worktree`: that flag puts worktrees
 in `<repo>/.claude/worktrees/` on a `worktree-<name>` branch from the default branch of the remote, while
