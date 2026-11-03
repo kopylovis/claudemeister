@@ -56,7 +56,9 @@ setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If yo
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
 
-Update with `brew upgrade claudemeister`. `claudemeister setup --remove` takes everything out of Claude Code,
+Update with `brew upgrade claudemeister`. Open sessions pick up the new version on their own: before each
+request the MCP server checks whether its code changed (a `brew upgrade` or a `git pull` in a checkout) and, if
+so, replaces itself with the new one on the same connection, without losing the request. `claudemeister setup --remove` takes everything out of Claude Code,
 and `brew uninstall claudemeister` removes the program.
 
 The projects folder is `~/Developer` by default. Set another one with a `projects=<path>` line in
@@ -300,12 +302,23 @@ the text from `notes:` or `RELEASE_NOTES`, so the answer ends with a ready comma
 ## Parallel tasks
 
 `/parallel <task>` (or "do this in parallel") creates a `parallel/<from the task>` branch and a git worktree from
-the current commit in `~/Developer/.worktrees/<project>/`, copies the untracked `local.properties`, `.env*` and
-`fastlane/.env*` into it, and opens a second Claude with the task and Remote Control in a new Terminal or iTerm2
-window. It works only in its own folder and commits to its own branch without merging or pushing. The
-permission mode is the usual one: questions arrive as notifications, and clicking one opens its tab.
-`--permission-mode auto` skips the questions. Uncommitted changes in the main folder don't make it into the
-worktree.
+the current commit in `~/Developer/.worktrees/<project>/`, copies local untracked files into it (see below), and
+opens a second Claude with the task and Remote Control in a new Terminal or iTerm2 window. It works only in its own
+folder and commits to its own branch without merging or pushing. The permission mode is the usual one: questions
+arrive as notifications, and clicking one opens its tab. `--permission-mode auto` skips the questions.
+Uncommitted changes in the main folder don't make it into the worktree.
+
+Which files are copied follows Claude Code's own
+[`.worktreeinclude`](https://code.claude.com/docs/en/worktrees#copy-gitignored-files-into-worktrees): if the
+project has that file in its root, its patterns (`.gitignore` syntax) pick the files, and only files git ignores
+are copied, so tracked files are never duplicated. The same file then also works for `claude --worktree` and for
+subagent worktrees. A project without `.worktreeinclude` gets the old list: untracked `local.properties`, `.env*`
+and `fastlane/.env*`, and the reply says so.
+
+claudemeister keeps creating the worktree itself instead of using `claude --worktree`: that flag puts worktrees
+in `<repo>/.claude/worktrees/` on a `worktree-<name>` branch from the default branch of the remote, while
+`/parallel` branches from the current commit, records the base branch for `merge` and `pr`, and opens its own
+window with caffeinate and Remote Control. `--tmux` needs `--worktree`, so it isn't used either.
 
 ```
 claudemeister parallel list            branches, commits, whether Claude is working there
@@ -480,6 +493,26 @@ from the clipboard and clears it), then press Start in the chat with the bot. Th
 `telegram away <sec>` sets how long without input counts as away, `telegram always` sends every time, and
 `telegram off` disconnects and deletes the token. If you're looking at Claude's tab but have walked away, the
 notification only goes to Telegram. Send errors are logged to `~/.cache/mnrh/notify/errors.log`.
+
+Permission requests can also be answered from Telegram. `claudemeister notify telegram approve on` turns it on
+(off by default) and adds a blocking `PermissionRequest` hook to `~/.claude/settings.json` (`claudemeister setup`
+installs it too, with a 600-second timeout). When Claude asks for permission and you're away from the Mac, the bot
+sends the project, session title, tool and command or path with "Разрешить" and "Отклонить" buttons, and Claude
+gets your answer. If you come back to the Mac, nobody answers within 9.5 minutes, or Telegram can't be reached,
+the hook exits without a decision and Claude asks in the terminal as usual; the message then says so and loses its
+buttons. While you're at the Mac, the hook exits at once and changes nothing. Questions (`AskUserQuestion`) and
+plan approval stay on the Mac. Only presses from the chat that pressed Start during setup count, and each
+message's buttons carry a random id that is valid for that one request. When the request is already in Telegram
+with buttons, the regular "permission needed" message isn't sent there a second time.
+`claudemeister notify telegram approve off` turns it off.
+
+The trade-off: anyone who can open your Telegram (an unlocked phone, a logged-in Telegram Desktop or web session)
+can allow a command on your Mac, and so can anyone holding the bot token, which sits in the Keychain. The message
+shows at most 600 characters of the command and hides values that look like passwords and tokens, so a long or
+masked command can't be fully read from the phone; the message says so, and then it's safer to deny or wait. An
+"allow" from Telegram doesn't bypass your `deny` rules in Claude Code settings. A request that guard held because
+it touches keys comes with guard's warning, but the button allows it just like the terminal prompt would. Turn it
+on only if your Telegram account has a password and two-step verification.
 
 Or to Tossling on your phone through your own ntfy: `claudemeister notify phone away` when you're away from the
 Mac, `phone always` every time, `phone off` to turn it off, `phone test` for a test. They go to the `claude`

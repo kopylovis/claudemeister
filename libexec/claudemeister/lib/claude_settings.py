@@ -8,7 +8,7 @@ import shlex
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CLAUDE_HOME, HOOKS, STATUS_CMD, hook_command, is_hook  # noqa: E402
+from mnrhlib import CLAUDE_HOME, HOOK_TIMEOUTS, HOOKS, STATUS_CMD, hook_command, is_hook  # noqa: E402
 
 PATH = os.path.join(CLAUDE_HOME, "settings.json")
 
@@ -69,7 +69,7 @@ def missing(settings, wanted=HOOKS, exact=False):
 
 
 def entry(cmd, run_async, matcher):
-    hook = {"type": "command", "command": hook_command(cmd), "timeout": 10}
+    hook = {"type": "command", "command": hook_command(cmd), "timeout": HOOK_TIMEOUTS.get(cmd, 10)}
     if run_async:
         hook["async"] = True
     return dict({"matcher": matcher} if matcher else {}, hooks=[hook])

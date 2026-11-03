@@ -13,6 +13,7 @@ from mnrhlib import CLAUDE_HOME, find_project, projects_dir, tilde
 TRANSLIT = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
                     ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s",
                      "t", "u", "f", "h", "ts", "ch", "sh", "sch", "", "y", "", "e", "yu", "ya"]))
+# Без своего .worktreeinclude в проекте копируем неотслеживаемые файлы по этому списку, как раньше
 COPY = ["local.properties", ".env", ".env.*", "fastlane/.env", "fastlane/.env.*"]
 
 
@@ -37,17 +38,40 @@ def worktree_root(root):
     return os.path.join(projects_dir(), ".worktrees", os.path.basename(root.rstrip("/")))
 
 
+def worktree_include(root):
+    """Файлы по .worktreeinclude, как их берёт Claude Code для своих worktree: шаблоны в синтаксисе .gitignore,
+    и только то, что git игнорирует, так что отслеживаемое не дублируется. None, если файла нет."""
+    inc = os.path.join(root, ".worktreeinclude")
+    if not os.path.isfile(inc):
+        return None
+    r = subprocess.run(["git", "-C", root, "ls-files", "-z", "--others", "--ignored", f"--exclude-from={inc}"],
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode or not r.stdout:
+        return []
+    r = subprocess.run(["git", "-C", root, "check-ignore", "-z", "--stdin"], input=r.stdout,
+                       capture_output=True, text=True, timeout=120)
+    return sorted(f for f in r.stdout.split("\0") if f)
+
+
 def copy_local(root, path):
+    """-> (скопированные пути, взяты ли они по .worktreeinclude)"""
+    files = worktree_include(root)
+    native = files is not None
+    if not native:
+        files = []
+        for pattern in COPY:
+            for src in glob.glob(os.path.join(glob.escape(root), pattern)):
+                rel = os.path.relpath(src, root)
+                if not git(root, "ls-files", rel):
+                    files.append(rel)
     copied = []
-    for pattern in COPY:
-        for src in glob.glob(os.path.join(glob.escape(root), pattern)):
-            rel = os.path.relpath(src, root)
-            dst = os.path.join(path, rel)
-            if os.path.isfile(src) and not os.path.exists(dst) and not git(root, "ls-files", rel):
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                shutil.copy2(src, dst)
-                copied.append(rel)
-    return copied
+    for rel in files:
+        src, dst = os.path.join(root, rel), os.path.join(path, rel)
+        if os.path.isfile(src) and not os.path.lexists(dst):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+            copied.append(rel)
+    return copied, native
 
 
 PERMISSION_MODES = ["default", "acceptEdits", "auto", "plan"]
@@ -74,7 +98,7 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
         return f"Не создал worktree: {e}", True
     git(root, "config", f"branch.{name}.mnrhBase", base)
     git(root, "config", f"branch.{name}.mnrhTask", task)
-    copied = copy_local(root, path)
+    copied, native = copy_local(root, path)
     dirty = git(root, "status", "--porcelain")
     prompt = (f"Это параллельная задача в отдельном git worktree {path}, ветка {name}, ответвлена от {base} "
               f"проекта {root}. Задача: {task}\n\nРаботай только в этой папке. Если нужны зависимости "
@@ -85,8 +109,11 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
     text, bad = claude_open.open_claude({"path": path, "mode": mode, "prompt": prompt, "flags": flags,
                                          "trust": claude_open.trusted(root), "remote_control": rc}, cm or "claudemeister")
     lines = [f"Ветка {name} от {base}, worktree {tilde(path)}."]
-    if copied:
-        lines.append("Скопировал неотслеживаемые настройки: " + ", ".join(copied) + ".")
+    if copied and native:
+        lines.append("Скопировал по .worktreeinclude: " + ", ".join(copied) + ".")
+    elif copied:
+        lines.append("Скопировал неотслеживаемые настройки: " + ", ".join(copied) + " (своего .worktreeinclude "
+                     "у проекта нет, поэтому по списку claudemeister).")
     if dirty:
         lines.append("В основной папке есть незакоммиченные изменения — в worktree их нет, он от последнего коммита.")
     lines.append(text)
