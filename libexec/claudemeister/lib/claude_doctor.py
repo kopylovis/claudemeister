@@ -139,7 +139,8 @@ def check_proxy():
 def check_modes():
     conf = read_config()
     states = [f"{name} {'вкл' if on else 'выкл'}" for name, on in
-              (("guard", conf.get("guard", "on") != "off"), ("humanize", conf.get("humanize", "off") == "on"))]
+              (("guard", conf.get("guard", "on") != "off"), ("humanize", conf.get("humanize", "off") == "on"),
+               ("buildlog", conf.get("buildlog", "on") != "off"))]
     return [("ok", "режимы: " + ", ".join(states))]
 
 
