@@ -63,7 +63,7 @@ def git_part(root):
 
 
 def last_session(root, cwd, exclude=None):
-    from claude_sessions import encode, is_junk
+    from session_store import encode, is_junk
     best = []
     for cwd in {root, os.path.abspath(cwd)}:
         pdir = os.path.join(claude_search.PROJECTS, encode(cwd))

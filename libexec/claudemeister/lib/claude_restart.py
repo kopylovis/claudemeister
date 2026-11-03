@@ -252,14 +252,14 @@ def background(fn, *args):
 
 
 def drop_junk(path, why):
-    import claude_sessions
+    import session_store
     sid = os.path.basename(path)[:-6]
-    if os.path.islink(path) or sid in claude_sessions.running_ids() or not claude_sessions.is_junk(path):
+    if os.path.islink(path) or sid in session_store.running_ids() or not session_store.is_junk(path):
         return False
-    for s in claude_sessions.by_id(sid, meta=False):
+    for s in session_store.by_id(sid, meta=False):
         if not s["link"]:
             s["running"] = None
-            claude_sessions.delete(s)
+            session_store.delete(s)
             log(f"пустая сессия {sid} удалена ({why})")
             return True
     return False
@@ -373,14 +373,14 @@ def notice():
 
 
 def forget_session(sid):
-    import claude_sessions
-    found = claude_sessions.by_id(sid, meta=False)
+    import session_store
+    found = session_store.by_id(sid, meta=False)
     if not found:
         log(f"forget: сессии {sid} не нашёл")
         return False
     s = found[0]
     s["running"] = None
-    claude_sessions.delete(s)
+    session_store.delete(s)
     log(f"forget: удалил {sid}")
     return True
 
@@ -467,7 +467,7 @@ def slim_current(dry=False, delay=1.5):
 
 
 def cli_slim(args):
-    import claude_sessions
+    import session_slim
     if "-h" in args or "--help" in args:
         print("claudemeister slim            изнутри Claude Code: закрыть его, сжать эту сессию (старые скриншоты и")
         print("                            длинные выводы до двух последних /compact) и открыть её снова")
@@ -479,9 +479,9 @@ def cli_slim(args):
         return 0
     rest = [a for a in args if a != "--dry-run"]
     if rest[:1] == ["list"]:
-        return claude_sessions.slim_cmd([], True)
+        return session_slim.slim_cmd([], True)
     if rest:
-        return claude_sessions.slim_cmd(rest, True)
+        return session_slim.slim_cmd(rest, True)
     try:
         text, _ = slim_current(dry="--dry-run" in args)
     except RestartError as e:

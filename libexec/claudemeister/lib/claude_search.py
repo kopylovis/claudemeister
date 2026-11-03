@@ -180,7 +180,7 @@ _HOMES = {}
 def home_of(data):
     pdir = os.path.basename(os.path.dirname(data["path"]))
     if pdir not in _HOMES:
-        from claude_sessions import decode
+        from session_store import decode
         _HOMES[pdir] = decode(pdir)
     return _HOMES[pdir] or data.get("cwd") or ""
 
