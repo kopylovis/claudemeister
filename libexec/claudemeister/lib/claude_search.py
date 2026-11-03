@@ -5,13 +5,13 @@ import re
 import shlex
 from datetime import datetime
 
-from mnrhlib import HOME, tilde, write_json
+from mnrhlib import CLAUDE_HOME, HOME, UUID_RE, tilde, write_json
 
-CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
+CLAUDE = CLAUDE_HOME
 PROJECTS = os.path.join(CLAUDE, "projects")
 INDEX = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "mnrh", "sessions-index")
 VERSION = 2
-UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+UUID = UUID_RE
 REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 LOCAL = ("<command-name>", "<local-command-stdout>", "<local-command-stderr>", "<local-command-caveat>",
          "<task-notification>")

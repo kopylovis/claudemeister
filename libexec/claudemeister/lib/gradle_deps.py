@@ -7,9 +7,9 @@ import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-from mnrhlib import HOME, projects_dir, tilde
+from mnrhlib import CACHE as MNRH_CACHE, projects_dir, tilde
 
-CACHE = os.path.join(HOME, ".cache", "mnrh", "maven")
+CACHE = os.path.join(MNRH_CACHE, "maven")
 TTL = 6 * 3600
 GOOGLE = "https://dl.google.com/dl/android/maven2"
 CENTRAL = "https://repo1.maven.org/maven2"

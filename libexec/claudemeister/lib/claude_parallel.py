@@ -8,7 +8,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, find_project, projects_dir, tilde
+from mnrhlib import CLAUDE_HOME, find_project, projects_dir, tilde
 
 TRANSLIT = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
                     ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s",
@@ -96,7 +96,7 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
 
 def running_in(path):
     """Claude открыт в этом worktree или глубже. Соседний worktree fix-login для fix не в счет."""
-    claude = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
+    claude = CLAUDE_HOME
     for f in glob.glob(os.path.join(claude, "sessions", "*.json")):
         try:
             with open(f) as fh:

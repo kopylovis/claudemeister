@@ -9,7 +9,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import BADGES, HOME, badge, read_config, tilde, write_config, write_json
+from mnrhlib import BADGES, CACHE, HOME, badge, read_config, tilde, write_config, write_json
 
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-guard.log")
 TAIL = 4 << 20
@@ -20,7 +20,7 @@ RULES = {
     "secrets-delete": "удаление секретов: rm файла-ключа или папки, где они лежат (~/.ssh, fastlane/ с ключами…), "
                       "security delete-* из связки ключей",
 }
-GUARD_STATE = os.path.join(HOME, ".cache", "mnrh", "guard")
+GUARD_STATE = os.path.join(CACHE, "guard")
 YES = re.compile(r"^\W*(да|ага|угу|ок|окей|ok|okay|yes|y|давай|выполняй|можно|разрешаю|разреши|делай|go|sure)\b", re.I)
 SENSITIVE_DIRS = ["~/.ssh", "~/.gnupg", "~/.aws", "~/Library/Keychains", "~/.config/gh"]
 DELETERS = {"rm", "rmdir", "unlink", "shred", "srm", "trash"}

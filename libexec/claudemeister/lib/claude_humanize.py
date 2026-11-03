@@ -5,18 +5,17 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CLAUDE_HOME, HOME, badge, read_config, tilde, write_config
+from mnrhlib import CACHE, CLAUDE_HOME, HOME, UUID_RE, badge, read_config, tilde, write_config
 import claude_settings
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 RULES = os.path.join(ROOT, "share", "claudemeister", "humanize.md")
-STATE = os.path.join(HOME, ".cache", "mnrh", "humanize")
+STATE = os.path.join(CACHE, "humanize")
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-humanize.log")
 SETTINGS = claude_settings.PATH
 SLASH_FILE = os.path.join(CLAUDE_HOME, "commands", "humanize.md")
 HOOK_CMD = "humanize-hook"
 HOOK_ROWS = claude_settings.rows(HOOK_CMD)
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 REMINDER = ("claudemeister humanization включена, правила письма из начала сессии действуют для всего, что ты пишешь людям. "
             "Ответ первым, без вступлений и итогов-пересказов, отдавай только то, что просили. Конкретные факты "
@@ -377,7 +376,7 @@ def current_sid():
         return sid
     pid = os.environ.get("CLAUDE_PID")
     try:
-        with open(os.path.join(HOME, ".claude", "sessions", f"{pid}.json")) as f:
+        with open(os.path.join(CLAUDE_HOME, "sessions", f"{pid}.json")) as f:
             return json.load(f).get("sessionId")
     except (OSError, ValueError, TypeError):
         return None

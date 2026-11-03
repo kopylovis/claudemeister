@@ -12,9 +12,9 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME  # noqa: E402
+from mnrhlib import CLAUDE_HOME  # noqa: E402
 
-CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
+CLAUDE = CLAUDE_HOME
 CLAUDE_BIN = os.environ.get("MNRH_CLAUDE_BIN", "claude")
 # флаги claude, которые при перезапуске не нужны: сессию задаем сами, остальное открыло бы что-то новое
 DROP = {"-r", "--resume", "-c", "--continue", "--session-id", "--fork-session", "-p", "--print", "-w", "--worktree",

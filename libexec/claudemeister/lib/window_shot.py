@@ -8,9 +8,9 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, settings_path, tilde
+from mnrhlib import CACHE, settings_path, tilde
 
-SHOTS = os.path.join(HOME, ".cache", "mnrh", "shots")
+SHOTS = os.path.join(CACHE, "shots")
 MAX_SIDE = 1600
 KEEP_DAYS = 3
 SECRET = re.compile(r"(github_pat_|ghp_|gho_|glpat-|sk-|xox[bap]-|AKIA|AIza)[A-Za-z0-9_\-]{4,}|[A-Za-z0-9+/_\-]{32,}")
