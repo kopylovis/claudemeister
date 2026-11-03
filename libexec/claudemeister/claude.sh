@@ -25,6 +25,7 @@ claudemeister ... -k                caffeinate без вопроса
 claudemeister ... -x                через свой VPS: только эта сессия, остальные программы напрямую
 claudemeister ... -d                напрямую, без вопроса про VPS
 claudemeister ... --new             новая сессия, не предлагать продолжить сохранённые
+claudemeister ... -i                без записи на диск: переписки и истории промптов не останется
 claudemeister ... -- <аргументы>    аргументы для claude, например: claudemeister kcalm -- --continue
 claudemeister sessions              сохранённые сессии: размер, продолжить, перенести, удалить (sessions -h)
 claudemeister restart               изнутри Claude: закрыть и открыть эту же сессию заново, с claude update
@@ -77,6 +78,7 @@ while [ $# -gt 0 ]; do
     -x|--proxy) net=vps ;;
     -d|--direct) net=direct ;;
     --new) new=1 ;;
+    -i|--incognito) new=1; export CLAUDE_CODE_SKIP_PROMPT_HISTORY=1 ;;
     --) shift; passthrough=("$@"); break ;;
     -*) echo "claudemeister: неизвестный флаг $1" >&2; exit 2 ;;
     *) [ -z "$target" ] && target="$1" || { echo "claudemeister: лишний аргумент $1" >&2; exit 2; } ;;
@@ -182,7 +184,7 @@ if [ "$net" = vps ]; then
 fi
 
 cd "$dir" || exit 1
-echo "-> ${dir/#$HOME/~} · $mode$([ "$net" = vps ] && echo ' · через VPS')"
+echo "-> ${dir/#$HOME/~} · $mode$([ "$net" = vps ] && echo ' · через VPS')$([ "${CLAUDE_CODE_SKIP_PROMPT_HISTORY:-}" = 1 ] && echo ' · без записи')"
 # если рядом стоит mnrh с настроенным sleep lid, он держит Mac и с закрытой крышкой; без mnrh шаг молча пропускается
 MNRH=$(command -v mnrh)
 if [ "$mode" = caffeinate ]; then

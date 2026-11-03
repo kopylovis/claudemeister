@@ -71,6 +71,10 @@ def no_hook_reason(pid, term):
 
 
 def plan(update=True, forget=False, slim=False, fresh=False):
+    if os.environ.get("CLAUDE_CODE_SKIP_PROMPT_HISTORY") == "1" and not (forget or fresh):
+        # claudemeister -i: переписка не пишется на диск, открывать заново нечего
+        raise RestartError("эта сессия без записи на диск (claudemeister -i), открыть ее заново нечем. "
+                           "/fresh или /forget откроют новую, тоже без записи")
     pid = find_claude()
     try:
         with open(session_file(pid)) as f:

@@ -16,6 +16,7 @@ claudemeister                menu: pick a project, sessions, proxy, humanization
 claudemeister kcalm          straight into a project (a prefix of its name is enough)
 claudemeister root           in the home folder
 claudemeister ... -x         through your own VPS, this session only
+claudemeister ... -i         nothing written to disk: no transcript, no prompt history
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
@@ -342,12 +343,20 @@ registers the `claudemeister` MCP server with the tools `restart`, `forget`, `fr
 - `/forget` (or "forget this session", the `forget` tool) makes a throwaway session: Claude quits, the
   conversation is deleted from disk together with its lines in `history.jsonl`, `file-history` and
   `session-env`, the screen and terminal scrollback are cleared, and a clean Claude opens in the same folder.
-  Unlike the built-in `/clear`, nothing stays behind in `/resume`. Claude Code has no such option of its own:
-  `--no-session-persistence` only works with `--print`.
+  Unlike the built-in `/clear`, nothing stays behind in `/resume`. To keep a session off the disk from the
+  start, launch it with `claudemeister -i`: it sets `CLAUDE_CODE_SKIP_PROMPT_HISTORY=1`, so Claude Code writes
+  neither the transcript nor the prompt history. Such a session can't be reopened, so `/restart` and `/slim`
+  refuse in it.
 - `/fresh` (or "start a new session", the `fresh` tool) does the same as `/forget` but leaves the old session
-  alone, so it stays in `/resume`. The built-in `/clear` carries the old title over to the new session, and
-  `/resume` then shows two sessions with the same name. `/fresh` starts a new process with a new `--session-id`
-  and no `--name`, so the new session starts untitled.
+  alone, so it stays in `/resume`. The built-in `/clear` now does almost the same (it no longer carries the AI
+  title over, and `/clear <name>` labels the session you leave). `/fresh` also starts a new Claude Code process,
+  so settings, MCP servers, CLAUDE.md and an installed update are loaded again, with caffeinate, the proxy and
+  your flags kept.
+
+Claude Code has its own `/restart` since 2.1.288. It applies an installed update and resumes the session, on a
+native install with a Pro or Max plan. claudemeister's `/restart` takes the name: it also runs `claude update`,
+keeps caffeinate, the proxy and your launch flags, and works in Terminal, iTerm2 and other terminals through the
+zsh hook. The built-in one stays available as `/update`.
 - "open Claude in kcalm" uses the `open_claude` tool. Without a project it returns the list of projects (branch,
   last commit) and modes to the chat, Claude asks which one, and opens a new window of the same terminal (Terminal
   or iTerm2) with `claudemeister <project> -k|-n`. You can pass a first prompt and `--continue`. Remote Control
