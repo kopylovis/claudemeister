@@ -16,7 +16,7 @@ MENU="$LIB/menu.py"
 
 help() {
   cat <<'EOF'
-claudemeister                       выбрать проект и сессию и запустить Claude Code
+claudemeister                       меню: проект, сессии, прокси, humanization, setup (MNRH_NO_MENU=1 без него)
 claudemeister open                  выбрать проект в папке проектов и запустить в нём Claude Code
 claudemeister root                  запустить в домашнем каталоге
 claudemeister <имя>                 сразу в проекте (достаточно начала имени) или в папке по пути

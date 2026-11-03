@@ -14,6 +14,11 @@ resolve_root() {
 ROOT=$(resolve_root)
 LIBEXEC="$ROOT/libexec/claudemeister"
 
+# без аргументов в терминале: меню действий, как у mnrh claude; MNRH_NO_MENU=1 сразу выбирает проект
+if [ $# -eq 0 ] && [ -t 0 ] && [ -t 1 ] && [ -z "${MNRH_NO_MENU:-}" ]; then
+  exec /usr/bin/python3 "$LIBEXEC/lib/claude_menu.py"
+fi
+
 case "${1:-}" in
   --version|-v)   cat "$ROOT/VERSION" ;;
   help|-h|--help) exec /bin/bash "$LIBEXEC/claude.sh" -h ;;
