@@ -201,10 +201,10 @@ def install_hooks():
         os.replace(tmp, SETTINGS)
         print(f"✓ подключил хуки {', '.join(missing)} в {tilde(SETTINGS)}")
     if not os.path.exists(SLASH_FILE):
-        import claude_restart
+        from slash import EXTRA_SLASH
         os.makedirs(os.path.dirname(SLASH_FILE), exist_ok=True)
         with open(SLASH_FILE, "w") as f:
-            f.write(claude_restart.EXTRA_SLASH["humanize"])
+            f.write(EXTRA_SLASH["humanize"])
         print(f"✓ /humanize → {tilde(SLASH_FILE)}")
     return True
 

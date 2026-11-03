@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import glob
 import json
 import os
 import re
@@ -14,6 +13,10 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mnrhlib import HOOKS, STATUS_CMD  # noqa: E402,F401
 from mnrhlib import CM, HOME, MNRH, PROMPTSILL_HINT, ROOT, hook_command, is_hook, promptsill_path, settings_path, tilde
+from claude_proc import (CLAUDE, CLAUDE_BIN, SHELLS, RestartError, argv_of, caffeinate_args,  # noqa: E402,F401
+                         claude_version, current_sid, drop_name, find_claude, launcher, ps, resume_flags,
+                         session_file, session_path)
+from slash import EXTRA_COMMANDS, EXTRA_SLASH, FORGET_SLASH, FRESH_SLASH, SLASH, SLIM_SLASH  # noqa: E402
 import claude_mac
 import claude_open
 import claude_search
@@ -24,8 +27,6 @@ import mnrh_todo
 import release_notes
 import window_shot
 
-CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
-CLAUDE_BIN = os.environ.get("MNRH_CLAUDE_BIN", "claude")
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-claude-restart.log")
 COMMANDS = os.path.join(CLAUDE, "commands")
 COMMAND_FILE = os.path.join(COMMANDS, "restart.md")
@@ -33,7 +34,6 @@ FORGET_FILE = os.path.join(COMMANDS, "forget.md")
 FRESH_FILE = os.path.join(COMMANDS, "fresh.md")
 OLD_FORGET_FILE = os.path.join(COMMANDS, "forget-session.md")
 SLIM_FILE = os.path.join(COMMANDS, "slim.md")
-EXTRA_COMMANDS = ["todo", "where", "release-notes", "parallel", "shot", "ask", "humanize"]
 SLIM_MIN = 5 << 20
 QUEUE = os.path.join(HOME, ".cache", "mnrh", "restart")
 NOTICES = os.path.join(HOME, ".cache", "mnrh", "notice")
@@ -46,27 +46,6 @@ OLD_MCP_NAME = "mnrh"
 ZSH_MARKERS = ("share/claudemeister/restart.zsh", "share/mnrh/restart.zsh")
 ZSHRC = os.path.join(os.environ.get("ZDOTDIR") or HOME, ".zshrc")
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-# флаги claude, которые при перезапуске не нужны: сессию задаем сами, остальное открыло бы что-то новое
-DROP = {"-r", "--resume", "-c", "--continue", "--session-id", "--fork-session", "-p", "--print", "-w", "--worktree",
-        "--tmux", "--from-pr", "--teleport", "--cloud", "--bg", "--background", "--desktop"}
-# сколько значений берет флаг, по claude --help: one ровно одно, many до следующего флага, maybe одно, если оно не флаг
-FLAG_VALUES = {
-    **dict.fromkeys(["--agent", "--agents", "--append-system-prompt", "--autocompact", "--debug-file", "--effort",
-                     "--environment", "--fallback-model", "--input-format", "--json-schema", "--max-budget-usd",
-                     "--model", "-n", "--name", "--output-format", "--permission-mode", "--permission-prompts",
-                     "--plugin-dir", "--plugin-url", "--remote-control-session-name-prefix", "--session-id",
-                     "--setting-sources", "--settings", "--system-prompt", "--system-prompt-snapshot"], "one"),
-    **dict.fromkeys(["--add-dir", "--allowedTools", "--allowed-tools", "--betas", "--disallowedTools",
-                     "--disallowed-tools", "--file", "--mcp-config", "--tools"], "many"),
-    **dict.fromkeys(["--cloud", "-d", "--debug", "--from-pr", "--prompt-suggestions", "--remote-control", "-r",
-                     "--resume", "--teleport", "-w", "--worktree"], "maybe"),
-    **dict.fromkeys(["--allow-dangerously-skip-permissions", "--ax-screen-reader", "--bg", "--background", "--bare",
-                     "--brief", "--chrome", "-c", "--continue", "--dangerously-skip-permissions", "--desktop",
-                     "--disable-slash-commands", "--exclude-dynamic-system-prompt-sections", "--fork-session",
-                     "--forward-subagent-text", "--ide", "--include-hook-events", "--include-partial-messages",
-                     "--no-chrome", "--no-session-persistence", "-p", "--print", "--replay-user-messages",
-                     "--restricted", "--safe-mode", "--strict-mcp-config", "--tmux", "--verbose"], "none"),
-}
 
 FIND_TAB = {
     "Apple_Terminal": '''
@@ -100,151 +79,6 @@ on run argv
   return "notfound"
 end run''',
 }
-
-
-class RestartError(Exception):
-    pass
-
-
-def ps(field, pid):
-    r = subprocess.run(["ps", "-o", f"{field}=", "-p", str(pid)], capture_output=True, text=True)
-    return r.stdout.strip()
-
-
-def session_file(pid):
-    return os.path.join(CLAUDE, "sessions", f"{pid}.json")
-
-
-def find_claude():
-    pid = os.getpid()
-    for _ in range(30):
-        if os.path.exists(session_file(pid)):
-            return pid
-        ppid = ps("ppid", pid)
-        if not ppid or int(ppid) <= 1:
-            break
-        pid = int(ppid)
-    env_pid = os.environ.get("CLAUDE_PID")
-    if env_pid and os.path.exists(session_file(env_pid)):
-        return int(env_pid)
-    raise RestartError("не нашёл процесс Claude Code: запускай изнутри сессии (/restart или MCP)")
-
-
-def resume_flags(args):
-    """Флаги прежнего запуска без первого промпта: он уже в сессии, и повторять его не надо."""
-    out, i = [], 0
-    while i < len(args):
-        a = args[i]
-        i += 1
-        if a == "--":
-            break
-        if not a.startswith("-") or a == "-":
-            continue
-        name, eq, _ = a.partition("=")
-        # незнакомый флаг: как раньше, берем следующее слово, если оно не флаг
-        kind = "none" if eq else FLAG_VALUES.get(name, "maybe")
-        values = []
-        if kind == "one" and i < len(args):
-            values = [args[i]]
-        elif kind in ("maybe", "many"):
-            while i + len(values) < len(args) and not args[i + len(values)].startswith("-"):
-                values.append(args[i + len(values)])
-                if kind == "maybe":
-                    break
-        i += len(values)
-        if name not in DROP:
-            out += [a] + values
-    return out
-
-
-def proc_argv(pid):
-    """Точный argv процесса через sysctl KERN_PROCARGS2: ps -o args теряет кавычки вокруг аргументов с пробелами."""
-    try:
-        import ctypes
-        import ctypes.util
-        libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-        mib = (ctypes.c_int * 3)(1, 49, int(pid))  # CTL_KERN, KERN_PROCARGS2
-        size = ctypes.c_size_t(0)
-        if libc.sysctl(mib, 3, None, ctypes.byref(size), None, 0) != 0:
-            return None
-        buf = ctypes.create_string_buffer(size.value)
-        if libc.sysctl(mib, 3, buf, ctypes.byref(size), None, 0) != 0:
-            return None
-        raw = buf.raw[:size.value]
-        argc = int.from_bytes(raw[:4], sys.byteorder)
-        rest = raw[4:]
-        rest = rest[rest.index(b"\0"):].lstrip(b"\0")  # путь к исполняемому файлу и выравнивание
-        args = rest.split(b"\0")[:argc]
-        return [a.decode("utf-8", "surrogateescape") for a in args] if len(args) == argc else None
-    except (OSError, ValueError, AttributeError):
-        return None
-
-
-def argv_of(pid):
-    argv = proc_argv(pid)
-    if argv:
-        return argv
-    line = ps("args", pid)
-    try:
-        return shlex.split(line)
-    except ValueError:
-        return line.split()
-
-
-def split_caffeinate(args):
-    out, i = [], 0
-    while i < len(args) and args[i].startswith("-"):
-        out.append(args[i])
-        if args[i] in ("-t", "-w") and i + 1 < len(args):
-            out.append(args[i + 1])
-            i += 1
-        i += 1
-    return out, args[i:]
-
-
-def caffeinate_args(pid):
-    candidates = []
-    parent = ps("ppid", pid)
-    if parent and os.path.basename(ps("comm", int(parent))) == "caffeinate":
-        candidates.append(int(parent))
-    r = subprocess.run(["ps", "-axo", "pid=,ppid=,comm="], capture_output=True, text=True)
-    for line in r.stdout.splitlines():
-        parts = line.split(None, 2)
-        if len(parts) == 3 and parts[1] == str(pid) and os.path.basename(parts[2]) == "caffeinate":
-            candidates.append(int(parts[0]))
-    for c in candidates:
-        flags, utility = split_caffeinate(argv_of(c)[1:])
-        if utility:
-            return flags
-    return None
-
-
-def drop_name(flags):
-    out, i = [], 0
-    while i < len(flags):
-        if flags[i] in ("-n", "--name"):
-            i += 2
-            continue
-        if flags[i].startswith("--name="):
-            i += 1
-            continue
-        out.append(flags[i])
-        i += 1
-    return out
-
-
-SHELLS = {"zsh", "bash", "sh", "fish", "login"}
-
-
-def launcher(pid):
-    parent = ps("ppid", pid)
-    while parent and int(parent) > 1:
-        name = os.path.basename(ps("comm", int(parent))).lstrip("-")
-        if name != "caffeinate":
-            return name
-        parent = ps("ppid", int(parent))
-    return ""
-
 
 def no_hook_reason(pid, term):
     head = f"в этом терминале ({term}) Claude возвращается во вкладку только через хук zsh, а его здесь нет: "
@@ -370,17 +204,6 @@ def watcher(p, delay):
     time.sleep(0.8)
     code, out = osascript(p["term"], p["tty"], p["line"])
     log(f"osascript {code} {out}: {p['line']}")
-
-
-def claude_version(path=None):
-    path = path or os.environ.get("CLAUDE_CODE_EXECPATH") or os.path.realpath(shutil.which("claude") or "")
-    name = os.path.basename(path)
-    return name if re.match(r"^\d+(\.\d+)+$", name) else ""
-
-
-def session_path(sid):
-    found = glob.glob(os.path.join(glob.escape(os.path.join(CLAUDE, "projects")), "*", sid + ".jsonl"))
-    return found[0] if found else None
 
 
 def session_title(sid):
@@ -739,14 +562,6 @@ def version():
         return "0"
 
 
-def current_sid():
-    try:
-        with open(session_file(find_claude())) as f:
-            return json.load(f).get("sessionId")
-    except (RestartError, OSError, ValueError):
-        return None
-
-
 def call_restart(tool, a):
     update = a.get("update", True)
     try:
@@ -862,119 +677,6 @@ def mcp():
             send({"jsonrpc": "2.0", "id": rid, "result": {}})
         else:
             send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"не умею {method}"}})
-
-
-EXTRA_SLASH = {
-    "todo": """---
-description: Бэклог проекта между сессиями: /todo — список, /todo <текст> — добавить, /todo done <N> — сделано
-allowed-tools: Bash(claudemeister todo:*)
----
-!`claudemeister todo $ARGUMENTS`
-
-Покажи пользователю результат выше как есть, без своих действий и пояснений.
-""",
-    "where": """---
-description: Где мы остановились: git, прошлая сессия в этом проекте, бэклог
-allowed-tools: Bash(claudemeister brief:*)
----
-!`claudemeister brief`
-
-По справке выше коротко скажи пользователю, где остановились (что было сделано и в каком всё состоянии) и
-что логично делать дальше — 2–5 пунктов. Ничего не запускай и не меняй.
-""",
-    "release-notes": """---
-description: Заметки к релизу «Что нового» на русском и английском для fastlane; аргументы — проект и/или --since <тег>
-allowed-tools: mcp__claudemeister__release_notes_context, mcp__claudemeister__release_notes_write, mcp__claudemeister__session_search, mcp__claudemeister__session_read
----
-Подготовь заметки к релизу. Аргументы пользователя: «$ARGUMENTS» (может быть имя проекта и --since <тег или коммит>).
-
-1. Вызови release_notes_context (project и since — из аргументов, если они есть).
-2. Если по коммитам неясно, что изменилось для пользователя, загляни в сессии через session_search/session_read.
-3. Напиши «Что нового» для ru-RU и en-US: для пользователей, по делу, без технических подробностей, не длиннее
-   500 символов (тогда текст подойдёт и для Google Play, и для App Store, RuStore, Firebase).
-4. Покажи оба текста и спроси, сохранить ли. После согласия вызови release_notes_write и покажи команду для fastlane.
-""",
-    "parallel": """---
-description: Сделать задачу параллельно: отдельная ветка и worktree, второй Claude в новом окне; list — что идёт
-allowed-tools: mcp__claudemeister__parallel_task, mcp__claudemeister__parallel_list
----
-Аргументы: «$ARGUMENTS».
-
-Если аргументов нет или это слово list — вызови parallel_list и покажи результат.
-Иначе вызови parallel_task с task — задачей из аргументов, переписанной так, чтобы она была понятна без контекста
-этой сессии (добавь нужные факты отсюда, если задача на них опирается). Потом коротко скажи пользователю, где
-открылся второй Claude, ссылку Remote Control, если она есть, и как потом влить или выбросить ветку.
-""",
-    "shot": """---
-description: Снимок окна приложения (Chrome, Safari, Simulator…): /shot <приложение> [вопрос]; без аргументов — список окон
-allowed-tools: Bash(claudemeister shot:*), Read
----
-!`claudemeister shot $1`
-
-Если выше путь к PNG — открой его инструментом Read и ответь на вопрос пользователя о снимке: «$ARGUMENTS»
-(первое слово — приложение). Если вопроса нет — коротко опиши, что видно. Если выше список окон или ошибка —
-покажи их пользователю.
-""",
-    "ask": """---
-description: Спросить про другой проект: /ask <проект> <вопрос> — ответит отдельный Claude, только чтение
-allowed-tools: mcp__claudemeister__ask_project
----
-Аргументы: «$ARGUMENTS». Первое слово — проект, остальное — вопрос.
-
-Вызови ask_project с этим проектом и вопросом. Если вопрос опирается на контекст этой сессии, допиши в него
-нужные факты, чтобы он был понятен без неё. Ответ перескажи пользователю коротко, сохранив пути и код.
-""",
-    "humanize": """---
-description: claudemeister humanization: писать без признаков нейросети; /humanize переключает, on, off, status
-allowed-tools: Bash(claudemeister humanize:*)
----
-!`claudemeister humanize switch $ARGUMENTS`
-
-Если выше написано «включена» и есть свод правил, с этого ответа строго следуй ему во всём, что пишешь людям.
-Если «выключена», правила больше не обязательны. Ответь пользователю одной короткой фразой, в каком состоянии режим.
-""",
-}
-
-
-SLIM_SLASH = """---
-description: Сжать эту сессию (старые скриншоты и длинные выводы) и открыть её снова; list — другие сессии
-allowed-tools: Bash(claudemeister slim:*)
----
-!`claudemeister slim $ARGUMENTS`
-
-Если выше написано «Сжимаю», Claude Code сейчас закроется сам: ничего не делай и ответь одним словом: «Сжимаю».
-Иначе коротко перескажи пользователю, что написано выше, без своих действий.
-"""
-
-
-FORGET_SLASH = """---
-description: Забыть эту сессию без следа и открыть чистый Claude Code в той же папке
-allowed-tools: Bash(claudemeister forget:*)
----
-!`claudemeister forget $ARGUMENTS`
-
-Эта сессия сейчас удалится, и Claude Code откроется заново. Ничего не делай и ответь одним словом: «Забываю».
-"""
-
-
-FRESH_SLASH = """---
-description: Новая сессия без названия и с пустым контекстом; эта остаётся в /resume
-allowed-tools: Bash(claudemeister fresh:*)
----
-!`claudemeister fresh $ARGUMENTS`
-
-Claude Code сейчас закроется и откроется с новой сессией. Ничего не делай и ответь одним словом: «Открываю».
-"""
-
-
-SLASH = """---
-description: Перезапустить Claude Code с этой же сессией (с claude update перед запуском)
-allowed-tools: Bash(claudemeister restart:*)
----
-!`claudemeister restart $ARGUMENTS`
-
-Claude Code сейчас перезапустится сам. Ничего не делай и ответь одним словом: «Перезапускаюсь».
-"""
 
 
 def is_zsh_hook(line):

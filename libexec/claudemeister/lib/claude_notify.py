@@ -217,7 +217,7 @@ def plain(text, n=180):
 
 
 def own_terminal():
-    from claude_restart import RestartError, find_claude, ps
+    from claude_proc import RestartError, find_claude, ps
     try:
         pid = find_claude()
     except RestartError:
