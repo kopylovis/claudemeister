@@ -260,6 +260,9 @@ def message_for(payload, st):
 
 
 def hook():
+    # claude -p, который запускает /ask: он отвечает другому Claude, а не человеку, уведомлять не о чем
+    if os.environ.get("MNRH_CHILD") == "1":
+        return 0
     try:
         payload = json.load(sys.stdin)
     except ValueError:
