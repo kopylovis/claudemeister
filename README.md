@@ -2,60 +2,65 @@
 
 # claudemeister
 
-Обвязка для [Claude Code](https://code.claude.com) на macOS: запуск в проекте с выбором сессии,
-перезапуск и сжатие сессии изнутри Claude, прокси через свой сервер для отдельных сессий, защита
-секретов, уведомления, правила письма без признаков нейросети и MCP-сервер с инструментами
-для поиска по прошлым сессиям, бэклога, параллельных задач, снимков окон и заметок к релизу.
+English · [Русский](README.ru.md)
+
+A toolkit around [Claude Code](https://code.claude.com) on macOS. It starts Claude in a project and lets you
+pick a saved session, restarts or slims the current session from inside Claude, sends single sessions through
+your own proxy server, guards secrets, notifies you when Claude is waiting, and adds an MCP server for searching
+past sessions, a project backlog, parallel tasks, window screenshots and release notes.
+
+The interface and messages are in Russian.
 
 ```
-claudemeister                меню: выбрать проект, сессии, прокси, humanization, setup
-claudemeister kcalm          сразу в проекте (достаточно начала имени)
-claudemeister root           в домашнем каталоге
-claudemeister ... -x         через свой VPS, только эта сессия
-claudemeister sessions       сохранённые сессии: продолжить, перенести, удалить, clean, search, slim
-claudemeister setup          команды /restart, /forget и другие, хуки, MCP-сервер, хук zsh, прокси, promptsill
-claudemeister restart        изнутри Claude: закрыть, claude update, открыть эту же сессию снова
-claudemeister forget         изнутри Claude: удалить эту сессию без следа и открыть чистую
-claudemeister fresh          изнутри Claude: новая сессия без названия, эта остаётся в /resume
-claudemeister slim           изнутри Claude: сжать эту сессию и открыть снова
-claudemeister brief          где мы остановились: git, прошлая сессия, бэклог
-claudemeister parallel       задача в отдельной ветке и worktree, во втором окне Claude
-claudemeister ask            спросить отдельный Claude про другой проект, только чтение
-claudemeister release-notes  материал для «Что нового» к релизу
-claudemeister todo           бэклог задач проекта между сессиями (add, done, rm, all)
-claudemeister shot [прил.]   снимок окна приложения; без аргументов список окон
-claudemeister deps           устаревшие зависимости Gradle в libs.versions.toml
-claudemeister proxy          прокси через свой сервер для выбранных сессий: setup, test, remove
-claudemeister guard          вопрос перед чтением и удалением ключей; on, off, test, log
-claudemeister humanize       правила письма без признаков нейросети: on, off, check <файл>, rules
-claudemeister notify         уведомления, когда Claude ждёт тебя: on, off, after <сек>, test, telegram
+claudemeister                menu: pick a project, sessions, proxy, humanization, setup
+claudemeister kcalm          straight into a project (a prefix of its name is enough)
+claudemeister root           in the home folder
+claudemeister ... -x         through your own VPS, this session only
+claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
+claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
+claudemeister restart        from inside Claude: quit, claude update, reopen the same session
+claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
+claudemeister fresh          from inside Claude: new untitled session, this one stays in /resume
+claudemeister slim           from inside Claude: slim this session down and reopen it
+claudemeister brief          where we left off: git, last session, backlog
+claudemeister parallel       a task in its own branch and worktree, with a second Claude in a new window
+claudemeister ask            ask a separate, read-only Claude about another project
+claudemeister release-notes  material for "What's new" in a release
+claudemeister todo           project backlog that survives between sessions (add, done, rm, all)
+claudemeister shot [app]     screenshot of an app window; without arguments, a list of windows
+claudemeister deps           outdated Gradle dependencies in libs.versions.toml
+claudemeister proxy          proxy through your own server for chosen sessions: setup, test, remove
+claudemeister guard          ask before reading or deleting keys; on, off, test, log
+claudemeister humanize       writing rules without the usual AI tells: on, off, check <file>, rules
+claudemeister notify         notifications when Claude is waiting for you: on, off, after <sec>, test, telegram
 ```
 
-## Установка
+## Install
 
 ```bash
 brew install kopylovis/tap/claudemeister
 claudemeister setup
 ```
 
-Homebrew ставит заодно mihomo для `claudemeister -x`. `claudemeister setup` кладёт команды `/restart`,
-`/forget`, `/slim` и другие в `~/.claude/commands`, хуки в `~/.claude/settings.json`, хук zsh в `~/.zshrc`
-и регистрирует MCP-сервер `claudemeister`. Если прокси через VPS еще не настроен, setup спрашивает, настроить
-ли его сейчас (`--country KZ` сразу задает страну выхода). Если нет строки состояния
-[promptsill](https://github.com/kopylovis/promptsill), предлагает поставить ее через Homebrew.
+Homebrew also installs mihomo for `claudemeister -x`. `claudemeister setup` puts `/restart`, `/forget`, `/slim`
+and the other commands into `~/.claude/commands`, hooks into `~/.claude/settings.json` and a zsh hook into
+`~/.zshrc`, and registers the `claudemeister` MCP server. If the VPS proxy isn't set up yet, setup asks whether
+to do it now (`--country KZ` sets the expected exit country). If the
+[promptsill](https://github.com/kopylovis/promptsill) status line is missing, it offers to install it with Homebrew.
 
-Какие шаги сделаны, setup записывает в `~/.config/mnrh/claude-setup.json`. Если `claudemeister` запустить
-до setup или после обновления, в котором в setup появился новый шаг, он перечислит ненастроенное и предложит
-настроить. "Не предлагать" больше не спрашивает про эти шаги, `claudemeister setup` все равно настроит их.
+setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If you run `claudemeister` before
+setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
+предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
 
-Обновление: `brew upgrade claudemeister`. Убрать из Claude Code: `claudemeister setup --remove`.
-Удаление: `brew uninstall claudemeister`.
+Update with `brew upgrade claudemeister`. `claudemeister setup --remove` takes everything out of Claude Code,
+and `brew uninstall claudemeister` removes the program.
 
-Папка проектов по умолчанию `~/Developer`, другую задает строка `projects=<путь>` в `~/.config/mnrh/config`
-или `MNRH_PROJECTS=<путь>`. Читающие MCP-инструменты (`session_search`, `session_read`, `deps_outdated`
-и другие) setup разрешает сразу в `permissions.allow` в `~/.claude/settings.json`.
+The projects folder is `~/Developer` by default. Set another one with a `projects=<path>` line in
+`~/.config/mnrh/config` or with `MNRH_PROJECTS=<path>`. setup puts the read-only MCP tools (`session_search`,
+`session_read`, `deps_outdated` and others) into `permissions.allow` in `~/.claude/settings.json`, so Claude
+doesn't ask before using them.
 
-### Из исходников, для разработки
+### From source, for development
 
 ```bash
 git clone https://github.com/kopylovis/claudemeister ~/Developer/claudemeister
@@ -64,409 +69,388 @@ make install
 claudemeister setup
 ```
 
-`make install` кладёт в `~/.local/bin` символическую ссылку на проект, поэтому правки работают без
-переустановки. Удаление: `make uninstall`. Проверки: `make test`.
+`make install` puts a symlink to the checkout into `~/.local/bin`, so edits take effect without reinstalling.
+`make uninstall` removes it, `make test` runs the checks.
 
-### Выпуск новой версии
+### Releasing
 
-1. Поднять номер в `VERSION`, через PR.
-2. Поставить подписанный тег на коммит в `main`: `git tag -s v$(cat VERSION) -m v$(cat VERSION)` и запушить его.
-3. В `kopylovis/homebrew-tap` в `Formula/claudemeister.rb` обновить `tag:` и `revision:`
+1. Bump `VERSION` in a PR.
+2. Put a signed tag on the commit in `main` (`git tag -s v$(cat VERSION) -m v$(cat VERSION)`) and push it.
+3. In `kopylovis/homebrew-tap`, update `tag:` and `revision:` in `Formula/claudemeister.rb`
    (`git rev-parse v$(cat VERSION)^{commit}`).
 
-## Требования
+## Requirements
 
-macOS, bash и `/usr/bin/python3` из Xcode Command Line Tools (`xcode-select --install`). Для уведомлений
-нужен `swiftc` оттуда же, для `claudemeister -x` нужен mihomo.
+macOS, bash and `/usr/bin/python3` from the Xcode Command Line Tools (`xcode-select --install`). Notifications
+need `swiftc` from the same tools. `claudemeister -x` needs mihomo.
 
-## Как работает `claudemeister`
+## How `claudemeister` works
 
-`claudemeister` без аргументов в терминале открывает меню действий: выбрать проект, домашний каталог,
-сохранённые сессии, прокси, humanization и setup. Выбранное запускается, а полная команда печатается, чтобы
-в следующий раз набрать ее сразу. После действия можно вернуться в меню. `MNRH_NO_MENU=1` пропускает меню
-и сразу открывает выбор проекта.
-`claudemeister open` показывает каталоги папки проектов (по умолчанию `~/Developer`, другая задается в `mnrh init`, строкой `projects=<путь>` в `~/.config/mnrh/config` или `MNRH_PROJECTS`) с текущей веткой и датой последнего коммита.
-Выбор стрелками ↑↓ и Enter. Цифра сразу ставит курсор на пункт (`0` — домашний
-каталог, `1` и `0` подряд — десятый), буквы фильтруют список по имени, Esc
-сбрасывает фильтр или выходит.
+Without arguments in a terminal, `claudemeister` opens an action menu: pick a project, the home folder, saved
+sessions, proxy, humanization and setup. It runs the chosen action and prints the full command so you can type
+it directly next time. Afterwards you can go back to the menu. `MNRH_NO_MENU=1` skips the menu and goes straight
+to the project list.
 
-Если у проекта есть сохранённые сессии, дальше предлагается продолжить одну из них или
-начать новую (Enter — новая). Сессии свежие сверху: когда, размер, число сообщений и
-название. Пустые (только `/clear` и т. п.) не показываются, открытые в других окнах тоже,
-чтобы две копии Claude не писали в один файл. Шага нет с `--new` и когда после `--` уже
-есть `--continue`, `--resume`, `--session-id` или `--print`; `open_claude` передаёт `--new`.
+`claudemeister open` lists the folders in the projects folder with their current branch and last commit date.
+Move with ↑↓ and press Enter. A digit jumps to that item (`0` is the home folder, `1` then `0` is the tenth),
+letters filter the list by name, and Esc clears the filter or exits.
 
-Затем так же выбирается режим:
+If the project has saved sessions, you can then resume one of them or start a new one (Enter means new).
+Newest sessions come first, with time, size, number of messages and title. Empty sessions (only `/clear` and
+the like) are hidden, and so are sessions open in other windows, so two copies of Claude never write to one
+file. This step is skipped with `--new` and when the arguments after `--` already include `--continue`,
+`--resume`, `--session-id` or `--print`. `open_claude` passes `--new`.
 
-- **caffeinate** (Enter) — `caffeinate -is`: Mac не засыпает ни от простоя, ни на
-  питании от сети, пока идёт сессия. Экран гаснуть может. Нужно для долгих задач
-  и для Remote Control с телефона — уснувший Mac обрывает сессию.
-- **обычная** — просто `claude`.
+Then you pick a mode the same way:
 
-`-k` и `-n` выбирают режим без вопроса, всё после `--` передаётся claude:
-`claudemeister kcalm -k -- --continue`. Закрытую крышку на батарее caffeinate не
-перебивает: Mac с закрытой крышкой без зарядки все равно уснет.
+- caffeinate (Enter) runs `caffeinate -is`, so the Mac doesn't sleep from inactivity or on AC power while the
+  session runs. The screen can still turn off. Use it for long tasks and for Remote Control from your phone,
+  since a sleeping Mac drops the session.
+- normal just runs `claude`.
 
-### Сессия через свой сервер: `claudemeister proxy`
+`-k` and `-n` choose the mode without asking, and everything after `--` goes to claude:
+`claudemeister kcalm -k -- --continue`. caffeinate doesn't help with a closed lid on battery: the Mac sleeps anyway.
 
-После режима спрашивается сеть, если прокси настроен: напрямую или через сервер. Через
-сервер идет только эта сессия и запущенные из нее программы, которые читают `HTTPS_PROXY`
-(gh, npm, curl, git по https, MCP-серверы). git по SSH (`git@github.com:…`) ходит напрямую,
-потому что SSH переменные прокси не читает.
-Браузер, мессенджеры и другие окна терминала ходят напрямую, системный прокси и TUN не
-трогаются. `-x` выбирает сервер без вопроса, `-d` напрямую. Меню запоминает последний выбор.
+### A session through your own server: `claudemeister proxy`
 
-Работает через [mihomo](https://wiki.metacubex.one) (`brew install mihomo`). Он умеет
-VLESS (в том числе XHTTP) и Hysteria2 и берет из подписки первый живой сервер. Настройка один раз:
+If the proxy is configured, the next question is the network: direct or through your server. Only this session
+goes through the server, together with the programs it starts that read `HTTPS_PROXY` (gh, npm, curl, git over
+https, MCP servers). git over SSH (`git@github.com:…`) stays direct, because SSH ignores proxy variables. The
+browser, messengers and other terminal windows stay direct, and the system proxy and TUN are left alone. `-x`
+picks the server without asking, `-d` picks direct. The menu remembers your last choice.
+
+It runs on [mihomo](https://wiki.metacubex.one) (`brew install mihomo`), which speaks VLESS (including XHTTP)
+and Hysteria2 and uses the first live server from the subscription. One-time setup:
 
 ```bash
-claudemeister proxy setup 'https://…/sub/…' --country KZ   # ссылка на подписку, как в Happ
-claudemeister proxy test                                    # выход напрямую и через сервер: IP и страна
+claudemeister proxy setup 'https://…/sub/…' --country KZ   # subscription link, the same one Happ uses
+claudemeister proxy test                                    # exit IP and country, direct and through the server
 ```
 
-`--country` защищает аккаунт: если сервер выведет не в ту страну, сессия через прокси не
-запустится, а не пойдет из неожиданного места. `--only <выражение>` оставляет из подписки
-только серверы с подходящим именем. Зашифрованные ссылки `happ://crypt…` читает только Happ,
-нужна обычная `https://`.
+`--country` protects the account: if the server exits in another country, the proxied session refuses to
+start instead of showing up from an unexpected place. `--only <pattern>` keeps only the servers whose names
+match. Encrypted `happ://crypt…` links can only be read by Happ, so use the plain `https://` one.
 
-mihomo слушает `127.0.0.1:17890`, стартует с первой сессией через сервер и останавливается
-после последней. Сессия получает `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` и `NO_PROXY` для
-localhost. `/restart` и окна, которые открывают `open_claude` и `/parallel` из такой сессии,
-тоже идут через сервер.
+mihomo listens on `127.0.0.1:17890`, starts with the first proxied session and stops after the last. The
+session gets `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, and `NO_PROXY` for localhost. `/restart` and the windows
+that `open_claude` and `/parallel` open from such a session also go through the server.
 
-К серверу mihomo ходит через Wi-Fi или Ethernet в обход TUN-туннеля Happ и других VPN, так
-что Happ можно включать и выключать во время сессии, сессия этого не заметит. Это важно,
-когда Happ подключен к тому же серверу: через его туннель сервер сам до себя не достучится.
-Подписку claudemeister скачивает тем же путем при каждом запуске mihomo; если не вышло, берет прошлую
-копию. Если живых серверов в подписке нет, соединения отклоняются, а не уходят напрямую.
-Адреса серверов из подписки claudemeister узнает через DNS системы и записывает в `hosts` конфига mihomo.
-Сам mihomo в DNS не ходит. Иначе при корпоративном VPN, где DNS-сервер доступен только через
-туннель, его запрос через Wi-Fi не доходит, и mihomo не узнает адрес сервера.
-Настройка, ссылка и подписка лежат в `~/.config/mnrh/proxy/` с доступом только для тебя.
-Страну выхода claudemeister проверяет при каждом запуске mihomo и передает сессии в
-`PROMPTSILL_PROXY_LABEL`, по ней promptsill пишет в строке состояния `proxy KZ`. Еще claudemeister
-спрашивает у mihomo через unix-сокет `~/.local/state/mnrh/proxy/mihomo.sock`, какой сервер
-из подписки выбран и по какому протоколу, и передает протокол с IP в `PROMPTSILL_PROXY_DETAIL`.
-В macOS Terminal строка выглядит как `proxy KZ vless 203.0.113.7`. В iTerm2, Ghostty и других
-терминалах со ссылками остается `proxy KZ`, а Cmd-клик открывает страницу с подробностями
-(`exit.html` в той же папке). Все это снято при запуске mihomo. Если fallback потом переключится
-на другой сервер, текущий покажет `claudemeister proxy`. Если mihomo
-нет, `setup` предложит поставить его через brew; формула claudemeister ставит его сама.
+mihomo reaches the server over Wi-Fi or Ethernet, bypassing the TUN tunnel of Happ and other VPNs, so you can
+turn Happ on and off during a session without the session noticing. This matters when Happ is connected to the
+same server, since the server can't reach itself through its own tunnel. claudemeister downloads the
+subscription the same way each time mihomo starts and falls back to the previous copy if that fails. If no
+server in the subscription is alive, connections are refused instead of going direct. claudemeister resolves the
+subscription's server names through the system DNS and writes them into the `hosts` section of the mihomo
+config, so mihomo never does DNS itself. Without this, a corporate VPN whose DNS server is only reachable
+through the tunnel would leave mihomo unable to find the server, because its query goes out over Wi-Fi.
 
-## Как работает `claudemeister sessions`
+Settings, the link and the subscription live in `~/.config/mnrh/proxy/`, readable only by you. claudemeister
+checks the exit country every time mihomo starts and passes it to the session in `PROMPTSILL_PROXY_LABEL`, which
+promptsill shows as `proxy KZ` in the status line. It also asks mihomo over the unix socket
+`~/.local/state/mnrh/proxy/mihomo.sock` which server from the subscription is selected and with which protocol,
+and passes the protocol and IP in `PROMPTSILL_PROXY_DETAIL`. In macOS Terminal the status line shows
+`proxy KZ vless 203.0.113.7`. In iTerm2, Ghostty and other terminals with link support it stays `proxy KZ`, and
+Cmd-click opens a page with the details (`exit.html` in the same folder). All of this is captured when mihomo
+starts. If the fallback later switches servers, `claudemeister proxy` shows the current one. If mihomo is
+missing, `setup` offers to install it with brew; the claudemeister formula installs it anyway.
 
-Claude Code хранит сессии в `~/.claude/projects/<путь-папки>/<id>.jsonl`, рядом папка
-`<id>/` с субагентами и большими выводами инструментов. `claude --resume` видит только
-сессии текущей папки, поэтому после переезда проекта старые сессии пропадают из списка.
+## How `claudemeister sessions` works
 
-Без аргументов — список всех сессий, свежие сверху: когда, размер, папка, название
-(своё из `/rename`, иначе придуманное Claude, иначе последний запрос). `● открыта` —
-сессия идёт в другом окне, её не трогаем. Выбрал стрелками — дальше продолжить
-(caffeinate или обычная), перенести или удалить.
+Claude Code keeps sessions in `~/.claude/projects/<folder-path>/<id>.jsonl`, next to an `<id>/` folder with
+subagents and large tool outputs. `claude --resume` only sees sessions of the current folder, so after you move a
+project its old sessions disappear from the list.
 
-- `mv <id> <папка>` — переносит файлы в хранилище новой папки и переписывает `cwd`
-  внутри сессии, в том числе у субагентов. Остальное в файле не меняется, дата тоже.
-- `rm <id>...` — удаляет сессию вместе с её `file-history` и строками в `history.jsonl`.
-- `clean` — битые симлинки, сессии, где Claude так ни разу и не ответил, и папки
-  проектов, которых больше нет на диске (вместе с их `memory`). Каждая группа
-  спрашивается отдельно.
-- `-l` — просто список с id, без меню.
-- `search <слова>` — поиск по всем сессиям всех проектов (подробно ниже), `show <id> [N]` —
-  прочитать сессию с сообщения `N`, `-10` — последние десять.
+Without arguments you get every session, newest first: time, size, folder and title (your own from `/rename`,
+otherwise the one Claude made up, otherwise the last prompt). `● открыта` means the session is open in another
+window and won't be touched. Pick one with the arrows, then resume it (caffeinate or normal), move it or delete it.
 
-## Сжатие старых сессий: `claudemeister sessions slim`
+- `mv <id> <folder>` moves the files into the new folder's storage and rewrites `cwd` inside the session,
+  including subagents. Nothing else in the file changes, the date included.
+- `rm <id>...` deletes the session together with its `file-history` and its lines in `history.jsonl`.
+- `clean` removes broken symlinks, sessions where Claude never answered, and folders of projects that no longer
+  exist on disk (with their `memory`). It asks about each group separately.
+- `-l` prints a plain list with ids, no menu.
+- `search <words>` searches all sessions of all projects (see below), `show <id> [N]` reads a session from
+  message `N`, and `-10` shows the last ten.
 
-Большая сессия почти целиком состоит из скриншотов и выводов инструментов: у authmeister
-из 481 МБ ~330 МБ занимают картинки (каждая хранится дважды — для модели и копия для
-экрана), а текст разговора — несколько мегабайт. После `/compact` Claude Code отправляет
-модели только сводку, сообщения, которые `/compact` сохранил (`preservedMessages`), и то,
-что было после границы: при продолжении сессии он идёт от последнего сообщения назад и
-останавливается на `compact_boundary`. Старая часть нужна только для прокрутки вверх, но
-`--resume` всё равно разбирает весь файл — отсюда медленное открытие и память.
+## Slimming old sessions: `claudemeister sessions slim`
 
-`slim` в части до двух последних `/compact` (`--keep N`) заменяет скриншоты подписью
-`[скриншот 1,2 МБ удалён: mnrh slim]` (в копии для экрана — картинкой 1×1, чтобы экран не
-ломался) и обрезает выводы длиннее 8000 символов до начала и конца. Не трогает: всё после
-этой границы, сообщения, сохранённые при `/compact`, цепочку до последнего сообщения,
-сообщения Claude (в них подписи блоков размышлений) и историю файлов для `/rewind`.
+A big session is mostly screenshots and tool outputs. In one 481 MB session about 330 MB were images (each
+stored twice, once for the model and once for the screen), while the conversation text was a few megabytes.
+After `/compact`, Claude Code sends the model only the summary, the messages `/compact` kept
+(`preservedMessages`) and whatever came after the boundary: when resuming it walks back from the last message and
+stops at `compact_boundary`. The old part is only there for scrolling up, but `--resume` still parses the whole
+file, which makes opening slow and memory hungry.
 
-Перед записью сжатый файл сверяется с оригиналом: число строк, `uuid`, `parentUuid`,
-типы и время совпадают, всё, что попадает в контекст модели, совпадает побайтно, иначе
-ничего не записывается. Оригинал сжимается в `~/.cache/mnrh/slim-backup/` и хранится
-14 дней; `slim <id> --undo` возвращает его вместе с сообщениями, дописанными после
-сжатия. Дата сессии не меняется. Открытые сессии не сжимаются.
+Before the last two `/compact`s (`--keep N`), `slim` replaces screenshots with a caption
+`[скриншот 1,2 МБ удалён: mnrh slim]` (a 1×1 image in the screen copy, so the display doesn't break) and trims
+outputs longer than 8000 characters to their beginning and end. It leaves alone everything after that boundary,
+the messages kept by `/compact`, the chain up to the last message, Claude's messages (they carry thinking
+signatures) and the file history for `/rewind`.
+
+Before writing, the slimmed file is checked against the original: line count, `uuid`, `parentUuid`, types and
+timestamps must match, and everything that goes into the model's context must match byte for byte. Otherwise
+nothing is written. The original is compressed into `~/.cache/mnrh/slim-backup/` and kept for 14 days.
+`slim <id> --undo` restores it, along with any messages added after slimming. The session date doesn't change.
+Open sessions are never slimmed.
 
 ```
-claudemeister sessions slim              что можно освободить по всем закрытым сессиям
-claudemeister sessions slim <id> --copy  сжатая копия с новым id — открыть и проверить
-claudemeister sessions slim <id>         сжать (спросит подтверждение, -y без вопроса)
-claudemeister sessions slim <id> --undo  вернуть оригинал
+claudemeister sessions slim              how much all closed sessions could free up
+claudemeister sessions slim <id> --copy  a slimmed copy with a new id, to open and check
+claudemeister sessions slim <id>         slim it (asks first; -y doesn't)
+claudemeister sessions slim <id> --undo  restore the original
 ```
 
-Изнутри Claude Code — `/slim` (или попросить «сожми эту сессию», инструмент `slim` в MCP).
-Открытую сессию сжимать нельзя, поэтому `/slim` работает как `/restart`: сначала считает,
-сколько освободится, и если меньше 5 МБ — ничего не закрывает и просто говорит об этом.
-Иначе Claude закрывается, во вкладке выполняется `claudemeister sessions slim <id> -y`,
-и сессия открывается снова с теми же флагами и caffeinate. После открытия Claude
-показывает, сколько было и стало, или почему сжать не вышло (тогда сессия открыта как
-была). `/slim list` — что можно сжать среди закрытых сессий, `/slim <id>` — сжать одну из них.
+From inside Claude Code use `/slim` (or ask "slim this session", which calls the `slim` MCP tool). An open
+session can't be slimmed, so `/slim` works like `/restart`. It first estimates how much it would free, and if
+that's under 5 MB it closes nothing and just says so. Otherwise Claude quits, the tab runs
+`claudemeister sessions slim <id> -y`, and the session reopens with the same flags and caffeinate. After it
+reopens, Claude shows the size before and after, or why slimming failed (the session is then opened as it was).
+`/slim list` shows what can be slimmed among closed sessions, and `/slim <id>` slims one of them.
 
-Чего не будет после сжатия: старых скриншотов при прокрутке вверх, а при `/rewind` в
-точку до этих двух `/compact` — картинок и полных длинных выводов в том старом разговоре.
+What you lose: old screenshots when scrolling up, and, if you `/rewind` to a point before those two `/compact`s,
+the images and full long outputs in that old part of the conversation.
 
-## Поиск по прошлым сессиям
+## Searching past sessions
 
-Тот же поиск доступен Claude как MCP-инструменты `session_search` и `session_read`: можно
-спросить «как мы в sightra настраивали подпись для RuStore?», и Claude сам найдёт это в
-прошлых сессиях и прочитает нужное место. Ищется текст запросов, ответов Claude, выполненные
-команды (`$ …`, для остальных инструментов — файл или шаблон) и сводки после `/compact`.
-Выводы инструментов и служебные сообщения не индексируются. Все слова должны встретиться в
-одном сообщении, регистр не важен, слово ищется как подстрока, поэтому лучше давать основу:
-`подпис`, а не `подписью`. Фраза — в кавычках. Текущая сессия в поиск не попадает.
+The same search is available to Claude as the MCP tools `session_search` and `session_read`. Ask "how did we
+set up RuStore signing in sightra?" and Claude finds it in past sessions and reads the right spot. The index
+covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools) and
+the summaries after `/compact`. Tool outputs and system messages aren't indexed. All words must appear in one
+message, case doesn't matter, and each word matches as a substring, so give a stem: `sign` rather than
+`signing`. Put phrases in quotes. The current session is excluded.
 
-Индекс лежит в `~/.cache/mnrh/sessions-index/<id>.json`: из сессии берётся только текст
-(у самой большой из 481 МБ получается около 1 МБ). Первый проход по всем сессиям занимает
-пару секунд, дальше дочитываются только новые строки, и запрос выполняется за доли секунды.
-Индекс обновляется в фоне при старте каждой сессии (хук `SessionStart`). У удалённых сессий,
-в том числе через `/forget` и `sessions rm`, индекс удаляется сразу.
+The index lives in `~/.cache/mnrh/sessions-index/<id>.json` and holds only text (about 1 MB for a 481 MB
+session). The first pass over all sessions takes a couple of seconds. After that only new lines are read, and a
+query takes a fraction of a second. The index is refreshed in the background when each session starts (the
+`SessionStart` hook). When a session is deleted, including through `/forget` and `sessions rm`, its index goes
+with it.
 
-## Устаревшие зависимости: `claudemeister deps`
+## Outdated dependencies: `claudemeister deps`
 
-Разбирает `gradle/libs.versions.toml` (версии, библиотеки, плагины), сверяет с Google Maven,
-Maven Central и Gradle Plugin Portal и показывает, что обновилось, насколько (мажорная,
-минорная, патч) и какие библиотеки на этой версии. Ещё — версию Gradle wrapper и что
-обновлять вместе: Kotlin и KSP, AGP и Gradle, Compose Multiplatform и Kotlin. Варианты
-вроде `-jre`/`-android` сравниваются только между собой, alpha/beta/rc — с `--pre`.
-`claudemeister deps status` (и `claudemeister deps` без терминала) — текущий проект, а если в нём нет каталога, все проекты. Ответы
-репозиториев кешируются на 6 часов. Для Claude то же самое — инструмент `deps_outdated`.
+Parses `gradle/libs.versions.toml` (versions, libraries, plugins), checks Google Maven, Maven Central and the
+Gradle Plugin Portal, and shows what has a newer version, how big the jump is (major, minor, patch) and which
+libraries use that version. It also shows the Gradle wrapper version and what has to move together: Kotlin and
+KSP, AGP and Gradle, Compose Multiplatform and Kotlin. Variants such as `-jre`/`-android` are only compared with
+each other, and alpha/beta/rc only with `--pre`. `claudemeister deps status` (and `claudemeister deps` outside a
+terminal) checks the current project, or all projects if the current one has no catalog. Repository answers are
+cached for 6 hours. Claude gets the same through the `deps_outdated` tool.
 
-## Команды в Claude Code
+## Commands in Claude Code
 
-`claudemeister setup` кладёт в `~/.claude/commands/`:
+`claudemeister setup` puts these into `~/.claude/commands/`:
 
-| Команда | Что делает |
+| Command | What it does |
 |---|---|
-| `/restart` | перезапуск с `claude update`, сессия продолжается |
-| `/forget` | удалить эту сессию без следа и открыть чистую |
-| `/fresh` | новая сессия без названия и с пустым контекстом, эта остаётся в `/resume` |
-| `/slim` | сжать эту сессию и открыть её снова; `/slim list` — другие |
-| `/where` | где остановились: git, прошлая сессия в проекте, бэклог, что дальше |
-| `/todo` | бэклог: `/todo` — список, `/todo <текст>` — добавить, `/todo done 2` — сделано |
-| `/release-notes` | «Что нового» на русском и английском для fastlane |
-| `/parallel <задача>` | та же задача в отдельной ветке во втором окне; `/parallel list` |
-| `/shot <приложение> [вопрос]` | снимок окна, Claude смотрит на него и отвечает |
-| `/ask <проект> <вопрос>` | ответ из другого проекта от отдельного Claude |
+| `/restart` | restart with `claude update`, the session continues |
+| `/forget` | delete this session without a trace and open a clean one |
+| `/fresh` | new untitled session with an empty context, this one stays in `/resume` |
+| `/slim` | slim this session down and reopen it; `/slim list` for others |
+| `/where` | where we left off: git, the last session in this project, backlog, what's next |
+| `/todo` | backlog: `/todo` lists, `/todo <text>` adds, `/todo done 2` marks done |
+| `/release-notes` | "What's new" in Russian and English for fastlane |
+| `/parallel <task>` | the same task in its own branch in a second window; `/parallel list` |
+| `/shot <app> [question]` | screenshot of a window that Claude looks at and answers about |
+| `/ask <project> <question>` | an answer from another project by a separate Claude |
 
-## Где мы остановились
+## Where we left off
 
-При старте новой сессии хук `SessionStart` передаёт Claude справку о проекте (как фон, в
-разговор не пересказывается): ветка, незакоммиченное и незапушенное, последний тег, пять
-последних коммитов, прошлая сессия в этой папке — название, последний запрос и последний
-ответ Claude (обычно там итог работы) — и открытые задачи бэклога. Тебе показывается одна
-строка: «claudemeister: прошлая сессия «…» (вчера) · незакоммичено 3 · в бэклоге 2 · /where —
-подробнее». Только для новых сессий в терминале: не после `--resume`, `/clear`, `/forget`
-и не в `claude -p`. Выключить: `claudemeister brief off`.
+When a new session starts, the `SessionStart` hook gives Claude a brief about the project as background (it
+isn't repeated back to you): branch, uncommitted and unpushed changes, the last tag, the last five commits, the
+previous session in this folder (title, last prompt and Claude's last answer, which usually sums up the work)
+and the open backlog items. You see one line, like
+"claudemeister: прошлая сессия «…» (вчера) · незакоммичено 3 · в бэклоге 2 · /where — подробнее". This only
+happens for new sessions in a terminal, not after `--resume`, `/clear` or `/forget`, and not in `claude -p`.
+Turn it off with `claudemeister brief off`.
 
-## Бэклог: `claudemeister todo`
+## Backlog: `claudemeister todo`
 
-Задачи «на потом», которые живут между сессиями, в отличие от списка задач внутри одной
-сессии. По одному файлу на проект: `~/.config/mnrh/todo/<проект>.md`, обычный чек-лист.
-Проект — корень git текущей папки, `-p <проект>` — другой. Claude видит открытые задачи
-при старте сессии и может сам добавлять («запиши на потом…») и закрывать их
-(`todo_add`, `todo_done`, `todo_list` — без вопроса о разрешении).
+Tasks for later that live between sessions, unlike the task list inside a single session. One file per project,
+`~/.config/mnrh/todo/<project>.md`, a plain checklist. The project is the git root of the current folder;
+`-p <project>` picks another one. Claude sees open items when a session starts and can add ("note this for
+later…") and close them itself (`todo_add`, `todo_done`, `todo_list` run without asking for permission).
 
-## Заметки к релизу
+## Release notes
 
-`/release-notes` собирает материал (`release_notes_context`): версию из
-`libs.versions.toml` (`appversion`/`versionName`) или `versionName`/`MARKETING_VERSION`,
-коммиты с прошлого релиза — от последнего тега, последнего запуска fastlane
-(`fastlane/report.xml`) или прошлых заметок, что новее, — и сессии Claude за этот период.
-Claude пишет «Что нового» на ru-RU и en-US до 500 символов (влезает в Google Play; App
-Store и TestFlight — 4000, RuStore — 5000, Firebase — 16000), показывает и после согласия
-сохраняет в `fastlane/release_notes/<версия>.<язык>.txt`, а если есть
-`fastlane/metadata` — ещё в `changelogs/<versionCode>.txt` и `release_notes.txt`. Fastfile
-твоих проектов берёт текст из `notes:` или `RELEASE_NOTES`, поэтому в ответе — готовая
-команда: `RELEASE_NOTES="$(cat fastlane/release_notes/3.1.2.ru-RU.txt)" bundle exec fastlane …`.
+`/release-notes` gathers material (`release_notes_context`): the version from `libs.versions.toml`
+(`appversion`/`versionName`) or `versionName`/`MARKETING_VERSION`, the commits since the last release (counted
+from the last tag, the last fastlane run in `fastlane/report.xml` or the previous notes, whichever is newer) and
+the Claude sessions from that period. Claude writes "What's new" in ru-RU and en-US in up to 500 characters
+(enough for Google Play; the App Store and TestFlight allow 4000, RuStore 5000, Firebase 16000), shows it to
+you, and once you agree saves it to `fastlane/release_notes/<version>.<lang>.txt`. If there is
+`fastlane/metadata`, it also writes `changelogs/<versionCode>.txt` and `release_notes.txt`. The Fastfile takes
+the text from `notes:` or `RELEASE_NOTES`, so the answer ends with a ready command:
+`RELEASE_NOTES="$(cat fastlane/release_notes/3.1.2.ru-RU.txt)" bundle exec fastlane …`.
 
-## Параллельные задачи
+## Parallel tasks
 
-`/parallel <задача>` (или «сделай это параллельно») создаёт ветку `mnrh/<по задаче>` и
-git worktree от текущего коммита в `~/Developer/.worktrees/<проект>/`, копирует туда
-неотслеживаемые `local.properties`, `.env*`, `fastlane/.env*` и открывает в новом окне
-Terminal или iTerm2 второй Claude с задачей и Remote Control. Он работает только в своей
-папке и коммитит в свою ветку, не сливая и не пуша. Режим разрешений — обычный: вопросы
-приходят уведомлением, нажатие открывает его вкладку; `--permission-mode auto` — без
-вопросов. Незакоммиченные изменения основной папки в worktree не попадают.
+`/parallel <task>` (or "do this in parallel") creates a `mnrh/<from the task>` branch and a git worktree from
+the current commit in `~/Developer/.worktrees/<project>/`, copies the untracked `local.properties`, `.env*` and
+`fastlane/.env*` into it, and opens a second Claude with the task and Remote Control in a new Terminal or iTerm2
+window. It works only in its own folder and commits to its own branch without merging or pushing. The
+permission mode is the usual one: questions arrive as notifications, and clicking one opens its tab.
+`--permission-mode auto` skips the questions. Uncommitted changes in the main folder don't make it into the
+worktree.
 
 ```
-claudemeister parallel list            ветки, коммиты, работает ли там Claude
-claudemeister parallel merge <ветка>   влить в исходную ветку (без пуша), убрать worktree
-claudemeister parallel drop <ветка>    выбросить
+claudemeister parallel list            branches, commits, whether Claude is working there
+claudemeister parallel merge <branch>  merge into the original branch (no push), remove the worktree
+claudemeister parallel drop <branch>   throw it away
 ```
 
-Слияние не начнётся, пока там открыт Claude, есть незакоммиченное или основная папка
-стоит не на исходной ветке; при конфликте оно отменяется.
+A merge won't start while Claude is open there, while there are uncommitted changes, or while the main folder is
+on a different branch than the original one. On a conflict it's aborted.
 
-## Снимок окна: `claudemeister shot`
+## Window screenshot: `claudemeister shot`
 
-`/shot chrome почему кнопка съехала` — снимок переднего окна Chrome (или Safari,
-Simulator, Android Studio, Figma, VS Code…), Claude смотрит на него и отвечает. Без
-приложения — список окон, похожие на токены куски заголовков скрываются. Снимок
-уменьшается до 1600 px и лежит в `~/.cache/mnrh/shots` три дня. Нужно разрешение «Запись
-экрана» для терминала. Инструмент `window_screenshot` отдаёт картинку прямо в Claude и
-каждый раз спрашивает разрешение: на экране бывает чужое.
+`/shot chrome why did the button move` takes a screenshot of Chrome's front window (or Safari, Simulator,
+Android Studio, Figma, VS Code…), and Claude looks at it and answers. Without an app it lists windows, hiding
+title fragments that look like tokens. The screenshot is scaled down to 1600 px and kept in
+`~/.cache/mnrh/shots` for three days. The terminal needs Screen Recording permission. The `window_screenshot`
+tool hands the image straight to Claude and asks for permission every time, since the screen may show other
+people's things.
 
-## Вопрос к другому проекту: `/ask`
+## Asking another project: `/ask`
 
-`/ask backend какой формат ответа у /api/foods` — в папке backend запускается отдельный
-`claude -p` только с Read, Grep и Glob, без MCP-серверов и без сохранения сессии, и
-возвращает короткий ответ с путями и кусками кода. Чтение чужих файлов не засоряет
-контекст текущей сессии. Модель по умолчанию — Sonnet; простой вопрос — около 30 тыс.
-токенов и 5–10 секунд.
+`/ask backend what's the response format of /api/foods` starts a separate `claude -p` in the backend folder with
+only Read, Grep and Glob, no MCP servers and no saved session, and returns a short answer with paths and code
+snippets. Reading another project's files doesn't fill up the current session's context. The default model is
+Sonnet; a simple question costs about 30k tokens and 5 to 10 seconds.
 
-## Как работает перезапуск Claude Code
+## How restarting Claude Code works
 
-`claudemeister setup` кладёт `~/.claude/commands/restart.md`, `forget.md`, `fresh.md` и `slim.md` и регистрирует
-MCP-сервер `claudemeister` с инструментами `restart`, `forget`, `fresh`, `slim`, `open_claude`, `session_search`,
-`session_read` и другими (scope user, во всех проектах). Дальше в любой сессии:
+`claudemeister setup` puts `restart.md`, `forget.md`, `fresh.md` and `slim.md` into `~/.claude/commands/` and
+registers the `claudemeister` MCP server with the tools `restart`, `forget`, `fresh`, `slim`, `open_claude`,
+`session_search`, `session_read` and others (user scope, in every project). Then, in any session:
 
-- `/restart` — сразу, без участия модели; `/restart --no-update` — без обновления;
-- или попросить Claude «перезапустись» / «обновись» — он вызовет инструмент `restart`;
-- `/forget` (или «забудь эту сессию» — инструмент `forget`) — разовая сессия: Claude
-  закрывается, переписка удаляется с диска вместе с её строками в `history.jsonl`,
-  `file-history` и `session-env`, экран и прокрутка терминала очищаются, и в той же папке
-  открывается чистый Claude. В отличие
-  от встроенного `/clear`, старое не остаётся в `/resume`. У самого Claude Code такого
-  нет: `--no-session-persistence` работает только с `--print`.
-- `/fresh` (или «начни новую сессию», инструмент `fresh`) делает то же, что `/forget`, но старую
-  сессию не трогает: она остаётся в `/resume`. Встроенный `/clear` переносит в новую сессию
-  название старой, и в `/resume` потом две сессии с одним именем. `/fresh` запускает новый процесс
-  с новым `--session-id` и без `--name`, так что новая сессия начинается без названия.
-- «открой Claude в kcalm» — инструмент `open_claude`: без проекта он возвращает в чат список
-  проектов (ветка, последний коммит) и режимов, Claude спрашивает, что выбрать, и открывает
-  новое окно того же терминала (Terminal или iTerm2) с `claudemeister <проект> -k|-n`. Можно
-  передать первый запрос и `--continue`. Remote Control (`/rc`) включается сразу
-  (`--remote-control <проект>`, выключить — `remote_control: false`). В ответ — окно, tty, pid
-  и ссылка claude.ai/code на сессию, чтобы продолжить с телефона или в браузере.
-  Если Claude Code ещё не доверяет папке (нет `hasTrustDialogAccepted` у неё или выше
-  в `~/.claude.json`), окно не открывается: вопрос «Do you trust the files in this folder?»
-  через Remote Control не ответить, и сессия так и ждала бы. Claude спрашивает об этом
-  в чате и с согласия повторяет вызов с `trust: true`, тогда флаг ставится до запуска.
-  Worktree от `/parallel` получают доверие от своего проекта сами.
+- `/restart` restarts right away without involving the model; `/restart --no-update` skips the update.
+- Or ask Claude to "restart" or "update itself", and it calls the `restart` tool.
+- `/forget` (or "forget this session", the `forget` tool) makes a throwaway session: Claude quits, the
+  conversation is deleted from disk together with its lines in `history.jsonl`, `file-history` and
+  `session-env`, the screen and terminal scrollback are cleared, and a clean Claude opens in the same folder.
+  Unlike the built-in `/clear`, nothing stays behind in `/resume`. Claude Code has no such option of its own:
+  `--no-session-persistence` only works with `--print`.
+- `/fresh` (or "start a new session", the `fresh` tool) does the same as `/forget` but leaves the old session
+  alone, so it stays in `/resume`. The built-in `/clear` carries the old title over to the new session, and
+  `/resume` then shows two sessions with the same name. `/fresh` starts a new process with a new `--session-id`
+  and no `--name`, so the new session starts untitled.
+- "open Claude in kcalm" uses the `open_claude` tool. Without a project it returns the list of projects (branch,
+  last commit) and modes to the chat, Claude asks which one, and opens a new window of the same terminal (Terminal
+  or iTerm2) with `claudemeister <project> -k|-n`. You can pass a first prompt and `--continue`. Remote Control
+  (`/rc`) is on from the start (`--remote-control <project>`; turn it off with `remote_control: false`). The reply
+  contains the window, tty, pid and the claude.ai/code link to the session, so you can continue from your phone
+  or a browser. If Claude Code doesn't trust the folder yet (no `hasTrustDialogAccepted` for it or a parent in
+  `~/.claude.json`), no window opens: the "Do you trust the files in this folder?" prompt can't be answered over
+  Remote Control, and the session would wait forever. Claude asks you in the chat and, if you agree, calls again
+  with `trust: true`, which sets the flag before launch. Worktrees from `/parallel` inherit trust from their
+  project.
 
-Что происходит: по дереву процессов находится свой `claude` и его запись в
-`~/.claude/sessions/<pid>.json` (id сессии, папка, терминал). Отдельный отвязанный
-процесс шлёт ему SIGTERM — Claude закрывается штатно, сессия уже на диске, — и в той же
-вкладке выполняется `cd <папка> && { claude update; claude --resume <id>; }`.
-Флаги запуска (`--model`, `--dangerously-skip-permissions`, …) и caffeinate сохраняются.
+What happens under the hood: claudemeister finds its own `claude` in the process tree and its record in
+`~/.claude/sessions/<pid>.json` (session id, folder, terminal). A separate detached process sends it SIGTERM,
+so Claude quits cleanly with the session already on disk, and the same tab runs
+`cd <folder> && { claude update; claude --resume <id>; }`. Launch flags (`--model`,
+`--dangerously-skip-permissions`, …) and caffeinate are kept.
 
-Как команда попадает обратно во вкладку:
+How the command gets back into the tab:
 
-- **хук zsh** (основной способ, любой терминал — Android Studio, VS Code, Terminal, iTerm2).
-  `claudemeister setup` добавляет в `~/.zshrc` строку с `share/claudemeister/restart.zsh`. Перед
-  закрытием Claude в `~/.cache/mnrh/restart/<tty>` кладётся задание, и zsh выполняет его
-  перед следующим приглашением. Задания старше двух минут игнорируются. Работает во
-  вкладках, открытых после установки;
-- **AppleScript** — запасной вариант для Terminal и iTerm2, если хук в этой вкладке не
-  загружен. Первый раз macOS может спросить разрешение на управление терминалом; это
-  проверяется до закрытия, так что без разрешения Claude просто не закроется.
+- The zsh hook is the main way and works in any terminal (Android Studio, VS Code, Terminal, iTerm2).
+  `claudemeister setup` adds a line with `share/claudemeister/restart.zsh` to `~/.zshrc`. Before Claude quits,
+  a job is written to `~/.cache/mnrh/restart/<tty>`, and zsh runs it before the next prompt. Jobs older than two
+  minutes are ignored. It works in tabs opened after setup.
+- AppleScript is the fallback for Terminal and iTerm2 when the hook isn't loaded in that tab. The first time,
+  macOS may ask for permission to control the terminal. This is checked before quitting, so without permission
+  Claude simply doesn't quit.
 
-После запуска Claude показывает под строкой ввода, что произошло: «Claude Code перезапущен
-(обновлён 2.1.278 → 2.1.280). Сессия «…» продолжается» или «прошлая сессия «…» удалена… Это
-новая чистая сессия». Это хук `SessionStart` в `~/.claude/settings.json` (его ставит
-`claudemeister setup`): перед закрытием в `~/.cache/mnrh/notice/<id сессии>.json` кладётся
-записка, хук её показывает и удаляет. Модели это не отправляется. `/forget` для этого
-запускает новую сессию с заранее известным `--session-id`.
+After it starts, Claude shows what happened under the input line: "Claude Code перезапущен (обновлён 2.1.278 →
+2.1.280). Сессия «…» продолжается" (restarted and updated, the session continues) or that the previous session
+was deleted and this is a clean one. That's the `SessionStart` hook in `~/.claude/settings.json`, installed by
+`claudemeister setup`: before quitting, a note is written to `~/.cache/mnrh/notice/<session id>.json`, and the
+hook shows and deletes it. The model doesn't see it. That's why `/forget` starts the new session with a known
+`--session-id`.
 
-### Пустые сессии не копятся
+### Empty sessions don't pile up
 
-После `/clear` Claude заводит новую сессию, и если сразу закрыть его, в `/resume` остаётся
-«мусор»: внутри только запись о самой команде `/clear` и метаданные. `claudemeister setup`
-ставит хук `SessionEnd`: при закрытии своя сессия удаляется, если в ней нет ни одного
-ответа Claude и ни одного твоего сообщения (служебные `/команды` не в счёт). Если Claude
-закрыли крестиком и хук не успел, при следующем старте в этом же проекте хук `SessionStart`
-в фоне убирает такие пустые сессии старше минуты, которые не открыты в других окнах.
-Сессию с разговором это не трогает никогда, `!`-команды тоже считаются разговором.
+After `/clear` Claude starts a new session, and if you quit right away, `/resume` is left with junk: the
+session contains only the `/clear` record and metadata. `claudemeister setup` installs a `SessionEnd` hook that
+deletes its own session on exit if it has no answer from Claude and no message from you (service `/commands`
+don't count). If Claude was closed with the window's close button and the hook didn't get to run, the next
+`SessionStart` in the same project removes such empty sessions older than a minute in the background, as long as
+they aren't open in other windows. A session with an actual conversation is never touched, and `!` commands
+count as conversation.
 
-### Строка состояния
+### Status line
 
-Строку состояния рисует отдельная открытая программа
-[promptsill](https://github.com/kopylovis/promptsill). Если ее нет, `claudemeister setup` предлагает поставить ее
-через Homebrew (`brew install kopylovis/tap/promptsill`) и прописывает ее в `statusLine`,
-если своей строки ещё нет, и заменяет прежнюю `claudemeister statusline`. Две строки под вводом:
+The status line is a separate open source program,
+[promptsill](https://github.com/kopylovis/promptsill). If it's missing, `claudemeister setup` offers to install
+it with Homebrew (`brew install kopylovis/tap/promptsill`) and puts it into `statusLine` unless you already have
+your own, replacing the older `claudemeister statusline`. Two lines under the input:
 
 ```
 Opus · context ██▏   42% · 5h ███▏  63% +23%, runs out at 15:10, resets at 17:00 · week 35%
 master ↑3 ±5 · vite :5173 · memory 9.9/16 GB · swap 1.5 · Gradle 2 (3.1 GB)
 ```
 
-Что в ней: контекст, лимиты подписки с темпом расхода, таймер кэша, git, dev-серверы проекта
-и занятые порты, версия Node, память, демоны Gradle, симуляторы. Подписи по-английски, по-русски —
-при русской локали или с `promptsill install --lang ru`. Подробности — в README promptsill.
-`claudemeister statusline …` передаёт команды promptsill.
+It shows the context, subscription limits with the pace of use, a cache timer, git, the project's dev servers
+and busy ports, the Node version, memory, Gradle daemons and simulators. Labels are in English, or in Russian
+with a Russian locale or `promptsill install --lang ru`. See the promptsill README for details.
+`claudemeister statusline …` passes commands on to promptsill.
 
-### Защита секретов: `claudemeister guard`
+### Guarding secrets: `claudemeister guard`
 
-Хук `PreToolUse` следит только за двумя вещами:
+The `PreToolUse` hook watches exactly two things:
 
-| Правило | Что |
+| Rule | What |
 |---|---|
-| `secrets-read` | чтение и правка `.env*` (кроме `.example` и т. п.), `*.p8`, `*.p12`, `*.jks`, `*.keystore`, приватных ключей SSH, `*service-account*.json`, `*credentials*.json`, `keystore.properties`, `.netrc`, `.npmrc`; `security find-*-password -w` |
-| `secrets-delete` | `rm`, `rmdir`, `unlink`, `shred`, `trash` файла-ключа или папки, где ключи лежат (`~/.ssh`, `~/.gnupg`, `~/.aws`, связка ключей, `fastlane/` с `.p8` и JSON…); `security delete-*` |
+| `secrets-read` | reading or editing `.env*` (except `.example` and similar), `*.p8`, `*.p12`, `*.jks`, `*.keystore`, private SSH keys, `*service-account*.json`, `*credentials*.json`, `keystore.properties`, `.netrc`, `.npmrc`; `security find-*-password -w` |
+| `secrets-delete` | `rm`, `rmdir`, `unlink`, `shred`, `trash` on a key file or a folder that holds keys (`~/.ssh`, `~/.gnupg`, `~/.aws`, the keychain, `fastlane/` with `.p8` and JSON…); `security delete-*` |
 
-Остальное (`git push --force`, `reset --hard`, `rm` обычных файлов, выкладка через fastlane,
-SQL, команды на сервере) guard не трогает — это на совести обычных разрешений Claude Code.
+Everything else (`git push --force`, `reset --hard`, `rm` on ordinary files, fastlane uploads, SQL, commands on
+a server) is left to Claude Code's normal permissions.
 
-Это не отказ, а вопрос. В обычном режиме Claude Code сам показывает «разрешить?» с
-объяснением. В режимах `auto` и `--dangerously-skip-permissions` Claude Code так не умеет
-(«спросить» у него превращается в «запретить» или «разрешить»), поэтому guard задерживает
-вызов, а Claude спрашивает тебя в чате, зачем ему это нужно. Ответишь «да» (или «ок»,
-«давай», «yes») — тот же вызов пройдёт; ответ привязан к этому вызову и к твоему
-сообщению после вопроса, модель не может ответить за тебя. `claudemeister guard skip
-secrets-read` выключает правило, `guard test '<команда>'` показывает решение, `guard log` —
-последние срабатывания.
+It asks rather than refuses. In the default mode Claude Code shows its own "allow?" prompt with an explanation.
+In `auto` mode and with `--dangerously-skip-permissions` Claude Code can't do that (its "ask" turns into "deny"
+or "allow"), so guard holds the call and Claude asks you in the chat why it needs it. Answer "yes" (or "ok",
+"да", "давай") and the same call goes through. The answer is tied to that call and to your message after the
+question, so the model can't answer for you. `claudemeister guard skip secrets-read` turns a rule off,
+`guard test '<command>'` shows the decision, and `guard log` shows recent hits.
 
-### Уведомления, когда Claude ждёт тебя
+### Notifications when Claude is waiting for you
 
-`claudemeister setup` ставит хуки `UserPromptSubmit`, `Stop` и `Notification` (асинхронные,
-Claude их не ждёт). Уведомление macOS приходит, когда Claude:
+`claudemeister setup` installs the `UserPromptSubmit`, `Stop` and `Notification` hooks (asynchronous, Claude
+doesn't wait for them). A macOS notification arrives when Claude:
 
-- просит разрешение на инструмент или задаёт вопрос (в том числе от MCP-сервера);
-- закончил ход, который шёл дольше 20 секунд (`claudemeister notify after <сек>`);
-- минуту ждёт ответа, а уведомления о готовом ответе не было.
+- asks for permission to use a tool or asks a question (including one from an MCP server);
+- finishes a turn that took longer than 20 seconds (`claudemeister notify after <sec>`);
+- has been waiting for an answer for a minute with no "done" notification.
 
-Заголовок — проект и что случилось, ниже название сессии и начало ответа. Если ты и так
-смотришь на эту вкладку (Terminal или iTerm2 впереди и выбрана именно она) или на окно IDE,
-где идёт Claude, уведомления нет. Нажатие на уведомление открывает нужную вкладку в
-Terminal и iTerm2 (по tty, как `/restart`), а в Android Studio, VS Code и т. п. — окно
-приложения. Новое уведомление той же сессии заменяет старое, а после твоего следующего
-запроса оно убирается из Центра уведомлений.
+The title is the project and what happened; below it are the session title and the start of the answer. If you're
+already looking at that tab (Terminal or iTerm2 in front with that tab selected) or at the IDE window Claude runs
+in, there's no notification. Clicking it opens the right tab in Terminal and iTerm2 (by tty, like `/restart`) and
+the app window in Android Studio, VS Code and others. A new notification from the same session replaces the old
+one, and after your next prompt it's removed from Notification Center.
 
-Показывает их маленькое приложение `~/Library/Application Support/claudemeister/claudemeister Notify.app`
-(собирается из `share/claudemeister/notify/main.swift`). В первый раз macOS спросит, можно ли ему
-показывать уведомления, а при первом нажатии — можно ли ему управлять Terminal или iTerm2.
-`claudemeister notify test` — пробное уведомление, `notify off` / `on` — выключить и
-включить, `notify sound off` — без звука.
+They're shown by a small app, `~/Library/Application Support/claudemeister/claudemeister Notify.app`, built from
+`share/claudemeister/notify/main.swift`. The first time, macOS asks whether it may show notifications, and on the
+first click, whether it may control Terminal or iTerm2. `claudemeister notify test` sends a test notification,
+`notify off` and `on` turn them off and on, and `notify sound off` mutes them.
 
-Те же уведомления могут приходить в Telegram, когда тебя нет за Mac: экран заблокирован или
-2 минуты никто не трогал мышь и клавиатуру. `claudemeister notify telegram` подключает бота:
-создаёшь его у @BotFather, вводишь токен (или копируешь его и запускаешь команду не из
-терминала — claudemeister возьмёт токен из буфера обмена и очистит буфер), нажимаешь Start в чате с
-ботом. Токен лежит в Связке ключей (`mnrh-telegram`), в конфиге — только номер чата.
-`telegram test` — пробное сообщение, `telegram away <сек>` — через сколько секунд без ввода
-считать, что тебя нет, `telegram always` — присылать всегда, `telegram off` — отключить и
-удалить токен. Если ты смотришь на вкладку Claude, но отошёл, уведомление придёт только в
-Telegram. Ошибки отправки пишутся в `~/.cache/mnrh/notify/errors.log`.
+The same notifications can go to Telegram when you're away from the Mac: the screen is locked or nobody has
+touched the mouse and keyboard for 2 minutes. `claudemeister notify telegram` connects a bot: create it with
+@BotFather, enter the token (or copy it and run the command outside a terminal, and claudemeister takes the token
+from the clipboard and clears it), then press Start in the chat with the bot. The token is kept in the Keychain
+(`mnrh-telegram`); the config only holds the chat id. `telegram test` sends a test message,
+`telegram away <sec>` sets how long without input counts as away, `telegram always` sends every time, and
+`telegram off` disconnects and deletes the token. If you're looking at Claude's tab but have walked away, the
+notification only goes to Telegram. Send errors are logged to `~/.cache/mnrh/notify/errors.log`.
 
-Или в Tossling на телефоне, через свой ntfy: `claudemeister notify phone away` — когда тебя нет за Mac,
-`phone always` — всегда, `phone off` — выключить, `phone test` — пробное. Уходят в канал `claude`,
-вопросы и просьбы о разрешении — с высоким приоритетом. На телефоне: Tossling → Уведомления → + → `claude`.
+Or to Tossling on your phone through your own ntfy: `claudemeister notify phone away` when you're away from the
+Mac, `phone always` every time, `phone off` to turn it off, `phone test` for a test. They go to the `claude`
+channel, and questions and permission requests use high priority. On the phone, add the `claude` channel in
+Tossling's notification settings.
 
-Иконка claudemeister Notify — `share/claudemeister/icon.png`, 1024×1024 (скругленная копия для README лежит в `docs/icon.png`),
-картинка до края без прозрачности: macOS 26 сама скругляет её, а иконку с полями или
-прозрачными углами кладёт на серую подложку. Из PNG при сборке делается `AppIcon.icns`;
-при смене иконки помощник пересобирается сам. Центр уведомлений помнит старую иконку до
-перезагрузки или выхода из системы.
+The claudemeister Notify icon is `share/claudemeister/icon.png`, 1024×1024 (a rounded copy for the README is in
+`docs/icon.png`). It fills the whole square with no transparency: macOS 26 rounds it itself and puts an icon with
+margins or transparent corners on a gray plate. The build turns the PNG into `AppIcon.icns`, and the helper app
+rebuilds itself when the icon changes. Notification Center remembers the old icon until you restart or log out.
 
-Лог: `~/Library/Logs/mnrh-claude-restart.log`.
-
+Log: `~/Library/Logs/mnrh-claude-restart.log`.
