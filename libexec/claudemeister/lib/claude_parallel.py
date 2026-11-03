@@ -63,7 +63,7 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
     if not task:
         return "Нужна задача: что сделать параллельно", True
     base = git(root, "branch", "--show-current") or git(root, "rev-parse", "--short", "HEAD")
-    name = branch or f"mnrh/{slug(task)}"
+    name = branch or f"parallel/{slug(task)}"
     if git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{name}"):
         name = f"{name}-{time.strftime('%H%M%S')}"
     path = os.path.join(worktree_root(root), name.replace("/", "-"))
@@ -95,14 +95,18 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
 
 
 def running_in(path):
-    for f in glob.glob(os.path.join(HOME, ".claude", "sessions", "*.json")):
+    """Claude открыт в этом worktree или глубже. Соседний worktree fix-login для fix не в счет."""
+    claude = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
+    for f in glob.glob(os.path.join(claude, "sessions", "*.json")):
         try:
             with open(f) as fh:
                 info = json.load(fh)
-            if (info.get("cwd") or "").startswith(path):
-                os.kill(int(info.get("pid") or 0), 0)
+            cwd, pid = str(info.get("cwd") or ""), int(info.get("pid") or 0)
+            # pid 0 в kill означает всю группу процессов, такой kill всегда удается
+            if pid > 0 and (cwd == path or cwd.startswith(path.rstrip("/") + "/")):
+                os.kill(pid, 0)
                 return True
-        except (OSError, ValueError, ProcessLookupError, TypeError):
+        except (OSError, ValueError, TypeError, OverflowError):
             continue
     return False
 
@@ -185,7 +189,7 @@ START_TOOL = {
     "inputSchema": {"type": "object", "properties": {
         "task": {"type": "string", "description": "задача для второго Claude, понятная без контекста этой сессии"},
         "project": {"type": "string", "description": "проект; по умолчанию текущий"},
-        "branch": {"type": "string", "description": "имя ветки; по умолчанию mnrh/<по задаче>"},
+        "branch": {"type": "string", "description": "имя ветки; по умолчанию parallel/<по задаче>"},
         "mode": {"type": "string", "enum": ["caffeinate", "normal"]},
         "permission_mode": {"type": "string", "enum": PERMISSION_MODES,
                             "description": "режим разрешений второго Claude; по умолчанию обычный (спрашивает, "

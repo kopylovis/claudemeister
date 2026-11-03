@@ -292,7 +292,7 @@ Store и TestFlight — 4000, RuStore — 5000, Firebase — 16000), показ�
 
 ## Параллельные задачи
 
-`/parallel <задача>` (или «сделай это параллельно») создаёт ветку `mnrh/<по задаче>` и
+`/parallel <задача>` (или «сделай это параллельно») создаёт ветку `parallel/<по задаче>` и
 git worktree от текущего коммита в `~/Developer/.worktrees/<проект>/`, копирует туда
 неотслеживаемые `local.properties`, `.env*`, `fastlane/.env*` и открывает в новом окне
 Terminal или iTerm2 второй Claude с задачей и Remote Control. Он работает только в своей
