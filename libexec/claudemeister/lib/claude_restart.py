@@ -12,7 +12,7 @@ import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CM, HOME, MNRH, PROMPTSILL_HINT, hook_command, is_hook, promptsill_path, settings_path, tilde
+from mnrhlib import CM, HOME, MNRH, PROMPTSILL_HINT, ROOT, hook_command, is_hook, promptsill_path, settings_path, tilde
 import claude_mac
 import claude_open
 import claude_search
@@ -949,7 +949,17 @@ HOOKS = [("SessionStart", "notice", False, None), ("SessionEnd", "session-end", 
 STATUS_CMD = "statusline"
 
 
-def notice_hook(install):
+def rename_rule(rule):
+    """mcp__mnrh и mcp__mnrh__<инструмент> → то же для claudemeister; остальные правила как есть."""
+    if rule == f"mcp__{OLD_MCP_NAME}":
+        return f"mcp__{MCP_NAME}"
+    if rule.startswith(f"mcp__{OLD_MCP_NAME}__"):
+        return f"mcp__{MCP_NAME}__" + rule[len(f"mcp__{OLD_MCP_NAME}__"):]
+    return rule
+
+
+def notice_hook(install, rename_rules=False):
+    """rename_rules: перевести разрешения старого MCP-сервера mnrh на claudemeister (сервер mnrh был наш)."""
     try:
         with open(SETTINGS) as f:
             settings = json.load(f)
@@ -980,6 +990,9 @@ def notice_hook(install):
     if install and promptsill and (not line or is_hook(command, STATUS_CMD)):
         settings["statusLine"] = {"type": "command", "command": shlex.quote(promptsill),
                                   "padding": 0, "refreshInterval": 10}
+    elif install and is_hook(command, STATUS_CMD):
+        # без promptsill оставляем заглушку statusline, но уже claudemeister, а не mnrh claude
+        settings["statusLine"] = dict(line, command=hook_command(STATUS_CMD))
     elif not install and ours:
         settings.pop("statusLine")
     status_note = ("! строка состояния: у тебя уже своя statusLine, не трогаю" if line and not ours else
@@ -991,6 +1004,10 @@ def notice_hook(install):
     # разрешения старого MCP-сервера mnrh тоже убираем: инструменты теперь у claudemeister
     old_rules = {f"mcp__{OLD_MCP_NAME}__{name}" for name in READ_ONLY + ["mac_status", "free_memory"]}
     perms = settings.setdefault("permissions", {})
+    if rename_rules:
+        for key in ("allow", "ask", "deny"):
+            if isinstance(perms.get(key), list):
+                perms[key] = list(dict.fromkeys(rename_rule(r) for r in perms[key]))
     allow = [r for r in perms.get("allow", []) if r not in allow_rules and r not in old_rules] + \
         (allow_rules if install else [])
     if allow:
@@ -1053,10 +1070,18 @@ def mcp_get(name):
     return True, ([command.group(1)] if command else []) + (args.group(1).split() if args else [])
 
 
-def remove_old_mcp():
-    """Убрать MCP-сервер mnrh, если это наш старый mnrh claude mcp. Чужой сервер с тем же именем не трогает."""
+def old_mcp():
+    """Старый MCP-сервер mnrh: "ours" (mnrh claude mcp), "foreign" (чужой с тем же именем) или "absent"."""
     listed, registered = mcp_get(OLD_MCP_NAME)
-    if not listed or registered[1:] != ["claude", "mcp"] or os.path.basename(registered[0]) != "mnrh":
+    if not listed:
+        return "absent"
+    ours = registered[1:] == ["claude", "mcp"] and os.path.basename(registered[0]) == "mnrh"
+    return "ours" if ours else "foreign"
+
+
+def remove_old_mcp(state=None):
+    """Убрать MCP-сервер mnrh, если это наш старый mnrh claude mcp. Чужой сервер с тем же именем не трогает."""
+    if (state or old_mcp()) != "ours":
         return False
     subprocess.run(["claude", "mcp", "remove", "--scope", "user", OLD_MCP_NAME], capture_output=True)
     return True
@@ -1099,7 +1124,8 @@ def setup(args):
 
     # до хуков: если promptsill поставится сейчас, notice_hook сразу пропишет его в statusLine
     promptsill = claude_setup.promptsill_step()
-    notice_hook(True)
+    old = old_mcp()
+    notice_hook(True, rename_rules=old != "foreign")
     hook = hook_file()
     line = f'[ -f "{hook}" ] && source "{hook}"\n'
     lines = zshrc_lines()
@@ -1112,7 +1138,7 @@ def setup(args):
         write_zshrc(lines + [line])
         print(f"✓ хук перезапуска → {tilde(ZSHRC)} (работает в новых вкладках терминала)")
 
-    if remove_old_mcp():
+    if remove_old_mcp(old):
         print(f"✓ MCP-сервер {OLD_MCP_NAME} (mnrh claude mcp) убран, его инструменты теперь у {MCP_NAME}")
     listed, registered = mcp_get(MCP_NAME)
     if listed and registered != [CM, "mcp"]:
@@ -1137,6 +1163,11 @@ def setup(args):
     asked = {"proxy": proxy, "promptsill": promptsill}
     claude_setup.record(set(claude_setup.AUTO) | {s for s, r in asked.items() if r == "done"},
                         {s for s, r in asked.items() if r == "skipped"})
+    # setup все перевел на claudemeister, прежний отказ от переноса больше не нужен
+    claude_setup.write(*claude_setup.current(), legacy_declined=False)
+    if not shutil.which("claudemeister"):
+        print(f"! claudemeister нет в PATH, а /restart, /todo и другие команды вызывают его по имени. "
+              f"Поставь его: brew install kopylovis/tap/claudemeister или make install в {tilde(ROOT)}")
     print("Подхватится в новых вкладках и сессиях Claude Code; в уже открытых — после перезапуска.")
     return 0
 

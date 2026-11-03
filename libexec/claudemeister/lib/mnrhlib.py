@@ -21,7 +21,12 @@ def hook_command(sub):
 
 def is_hook(command, sub):
     """Хук claudemeister <sub> или старый, из mnrh: mnrh claude <sub>."""
-    return re.search(rf"(?:\bclaude|claudemeister)\s+{re.escape(sub)}(?:\s|$)", command or "") is not None
+    # после имени может стоять кавычка: shlex.quote берет в кавычки путь с пробелом
+    return re.search(rf"(?:\bclaude|claudemeister)['\"]?\s+{re.escape(sub)}(?:\s|$)", command or "") is not None
+
+
+# Хук или statusLine, которые ставил mnrh claude setup: .../mnrh claude <команда>
+LEGACY_CALL = re.compile(r"\bmnrh['\"]?\s+claude\s+\S")
 TTY = sys.stdout.isatty()
 
 

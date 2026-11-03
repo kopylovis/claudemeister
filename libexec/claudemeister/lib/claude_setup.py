@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
+from mnrhlib import HOME, LEGACY_CALL, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
 
 STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "mnrh", "claude-setup.json")
 CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
@@ -37,20 +37,33 @@ YES = ("", "y", "yes", "д", "да")
 LEGACY = ["commands", "hooks", "mcp"]
 
 
-def read():
+def raw():
     try:
         with open(STATE) as f:
             data = json.load(f)
-        return set(data.get("done", [])), set(data.get("skipped", []))
-    except (OSError, ValueError, AttributeError):
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
         return None
 
 
-def write(done, skipped):
+def read():
+    data = raw()
+    if data is None:
+        return None
+    return set(data.get("done", [])), set(data.get("skipped", []))
+
+
+def write(done, skipped, legacy_declined=None):
+    """legacy_declined: отказались переводить mnrh claude на claudemeister; None — оставить как было."""
+    if legacy_declined is None:
+        legacy_declined = bool((raw() or {}).get("legacy_declined"))
+    data = {"done": sorted(done), "skipped": sorted(skipped - done)}
+    if legacy_declined:
+        data["legacy_declined"] = True
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     tmp = STATE + ".tmp"
     with open(tmp, "w") as f:
-        json.dump({"done": sorted(done), "skipped": sorted(skipped - done)}, f, ensure_ascii=False, indent=2)
+        json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
     os.replace(tmp, STATE)
 
@@ -83,9 +96,17 @@ def legacy():
                 return f.read()
         except OSError:
             return ""
-    if "mnrh claude" in text(os.path.join(CLAUDE, "commands", "restart.md")):
+    if LEGACY_CALL.search(text(os.path.join(CLAUDE, "commands", "restart.md"))):
         return True
-    if "mnrh claude " in text(os.path.join(CLAUDE, "settings.json")):
+    try:
+        settings = json.loads(text(os.path.join(CLAUDE, "settings.json")) or "{}")
+        commands = [h.get("command", "") for entries in (settings.get("hooks") or {}).values()
+                    for e in entries for h in e.get("hooks", [])]
+        line = settings.get("statusLine")
+        commands.append(line.get("command", "") if isinstance(line, dict) else "")
+    except (ValueError, AttributeError, TypeError):
+        commands = []
+    if any(LEGACY_CALL.search(str(c)) for c in commands):
         return True
     try:
         servers = json.loads(text(os.path.join(HOME, ".claude.json")) or "{}").get("mcpServers") or {}
@@ -104,7 +125,7 @@ def pending():
         done = done | {"proxy"}
     if "promptsill" not in done and promptsill_path():
         done = done | {"promptsill"}
-    if legacy():
+    if not (raw() or {}).get("legacy_declined") and legacy():
         done = done - set(LEGACY)
     return [s for s in IDS if s not in done and s not in skipped], False
 
@@ -195,7 +216,12 @@ def check():
                  back="later")
     print()
     if answer == "never":
-        record(skipped=steps)
+        migrate = legacy() and set(LEGACY) & set(steps)
+        record(skipped=set(steps) - (set(LEGACY) if migrate else set()))
+        if migrate:
+            # шаги переноса в записи сделаны (их ставил mnrh claude setup), поэтому отказ помним отдельно
+            done, skipped = current()
+            write(done, skipped, legacy_declined=True)
         print("Больше не спрошу. Настроить можно в любой момент: claudemeister setup\n")
     elif answer == "yes" and set(steps) <= ASKS:
         for step in steps:
