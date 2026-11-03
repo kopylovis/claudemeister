@@ -17,6 +17,10 @@ CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
 PROJECTS = os.path.join(CLAUDE, "projects")
 CLAUDE_BIN = os.environ.get("MNRH_CLAUDE_BIN", "claude")
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+# что claudemeister хранит про сессию сам: резервные копии slim, последний ответ для уведомлений, humanize, guard
+SESSION_CACHES = [os.path.join(HOME, ".cache", "mnrh", sub, "{sid}" + tail) for sub, tail in
+                  (("slim-backup", ".*.jsonl.gz"), ("notify", ".json"), ("humanize", ".*"), ("guard", ".json"),
+                   ("notice", ".json"))]
 
 
 def usage():
@@ -383,8 +387,21 @@ def delete(s):
             if os.path.isdir(p) and not os.path.islink(p):
                 shutil.rmtree(p)
         forget_history(s["id"])
+        forget_caches(s["id"])
     claude_search.drop(s["id"])
     remove_if_empty(s["pdir"])
+
+
+def forget_caches(sid):
+    """Удалить без следа значит и наши копии: в бэкапе slim весь разговор, в notify последний ответ."""
+    if not UUID.match(sid):
+        return
+    for pattern in SESSION_CACHES:
+        for p in glob.glob(pattern.format(sid=sid)):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
 
 
 def forget_history(sid):
