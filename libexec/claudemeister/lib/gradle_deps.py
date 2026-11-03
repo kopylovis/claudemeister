@@ -54,7 +54,7 @@ def fetch(url):
     except OSError:
         pass
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "mnrh-deps"})
+        req = urllib.request.Request(url, headers={"User-Agent": "claudemeister"})
         with urllib.request.urlopen(req, timeout=15) as r:
             text = r.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:

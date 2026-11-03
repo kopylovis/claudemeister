@@ -1,7 +1,7 @@
-"""MCP-инструмент open_claude: новый Claude Code в новом окне терминала через mnrh claude.
+"""MCP-инструмент open_claude: новый Claude Code в новом окне терминала через claudemeister.
 
 Без проекта возвращает список, из которого выбирать (его показывает Claude в чате),
-с проектом — открывает окно Terminal или iTerm2, запускает mnrh claude и ждёт, пока Claude поднимется.
+с проектом — открывает окно Terminal или iTerm2, запускает claudemeister и ждёт, пока Claude поднимется.
 """
 import json
 import os
@@ -68,7 +68,7 @@ TOOL = {
     "name": "open_claude",
     "description": (
         "Открыть новый Claude Code в новом окне терминала (Terminal или iTerm2 — тот, где идёт эта сессия) "
-        "через mnrh claude. Вызови сначала без project: получишь список проектов и режимов — покажи его "
+        "через claudemeister. Вызови сначала без project: получишь список проектов и режимов — покажи его "
         "пользователю и спроси, что выбрать (если он уже назвал проект, можно сразу). Потом вызови с project "
         "(имя папки или начало имени, «~» — домашний каталог) и mode. Remote Control включается сразу, "
         "ссылка на сессию (claude.ai/code) приходит в ответе — дай её пользователю. "
@@ -173,7 +173,7 @@ def claude_on(tty):
     return None
 
 
-def open_claude(args, mnrh):
+def open_claude(args, cm):
     """-> (текст, ошибка ли)"""
     root, dirs = project_dirs()
     project = (args.get("project") or "").strip()
@@ -207,7 +207,7 @@ def open_claude(args, mnrh):
     name = "~" if target == HOME else os.path.basename(target)
     # из сессии через VPS новое окно тоже идёт через VPS, иначе напрямую, без вопроса в меню
     net = "-x" if os.environ.get("MNRH_PROXY") else "-d"
-    cmd = [mnrh, "claude", "open", target if direct else name, MODES[mode], net, "--new"]
+    cmd = [cm, "open", target if direct else name, MODES[mode], net, "--new"]
     rc = args.get("remote_control", True) is not False
     # имя у --remote-control необязательное: без него первый запрос принялся бы за имя
     extra = (["--remote-control", "home" if name == "~" else name] if rc else []) + \

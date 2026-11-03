@@ -1,27 +1,24 @@
 import json
 import os
 import re
-import shlex
-import shutil
 import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, badge, read_config, tilde, write_config
+from mnrhlib import HOME, badge, hook_command, is_hook, read_config, tilde, write_config
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
-RULES = os.path.join(ROOT, "share", "mnrh", "humanize.md")
+RULES = os.path.join(ROOT, "share", "claudemeister", "humanize.md")
 STATE = os.path.join(HOME, ".cache", "mnrh", "humanize")
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-humanize.log")
 CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
 SETTINGS = os.path.join(CLAUDE, "settings.json")
 SLASH_FILE = os.path.join(CLAUDE, "commands", "humanize.md")
-MNRH = shutil.which("mnrh") or os.path.join(ROOT, "bin", "mnrh")
-HOOK_CMD = "claude humanize-hook"
+HOOK_CMD = "humanize-hook"
 HOOK_EVENTS = [("SessionStart", False), ("UserPromptSubmit", False), ("Stop", True)]
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
-REMINDER = ("mnrh humanization включена, правила письма из начала сессии действуют для всего, что ты пишешь людям. "
+REMINDER = ("claudemeister humanization включена, правила письма из начала сессии действуют для всего, что ты пишешь людям. "
             "Ответ первым, без вступлений и итогов-пересказов, отдавай только то, что просили. Конкретные факты "
             "вместо значимости, восторгов и штампов. Без канцелярита, \"является\", \"позволяет\", модальной ваты, "
             "усилителей, \"по сути\" и объявленной честности. Длина предложений разная, без обрывков подряд. "
@@ -31,7 +28,7 @@ REMINDER = ("mnrh humanization включена, правила письма и�
             "Кавычки только прямые \"\", елочки нельзя. Букву е с точками не пиши, только е. Двоеточий избегай. "
             "Текст, который пользователь отправит людям, пиши как сообщение в мессенджере (правило 4.7). "
             "Перед отправкой перечитай по разделу 7.")
-OFF_NOTE = "mnrh humanization выключена, правила письма из этой сессии больше не обязательны, пиши как обычно."
+OFF_NOTE = "claudemeister humanization выключена, правила письма из этой сессии больше не обязательны, пиши как обычно."
 
 S = r"(?:^|(?<=[.!?…]\s)|(?<=\n))"
 MARKERS = [
@@ -177,7 +174,7 @@ def missing_hooks():
     except ValueError:
         return [e for e, _ in HOOK_EVENTS]
     return [event for event, _ in HOOK_EVENTS
-            if not any(HOOK_CMD in h.get("command", "") for e in hooks.get(event, []) for h in e.get("hooks", []))]
+            if not any(is_hook(h.get("command", ""), HOOK_CMD) for e in hooks.get(event, []) for h in e.get("hooks", []))]
 
 
 def install_hooks():
@@ -192,7 +189,7 @@ def install_hooks():
         hooks = data.setdefault("hooks", {})
         for event, run_async in HOOK_EVENTS:
             if event in missing:
-                hook = {"type": "command", "command": f"{shlex.quote(MNRH)} {HOOK_CMD}", "timeout": 10}
+                hook = {"type": "command", "command": hook_command(HOOK_CMD), "timeout": 10}
                 if run_async:
                     hook["async"] = True
                 hooks.setdefault(event, []).append({"hooks": [hook]})
@@ -414,7 +411,7 @@ def set_state(value, inside):
     sid = current_sid() if inside else None
     if value == "on":
         install_hooks()
-        print("mnrh humanization включена.")
+        print("claudemeister humanization включена.")
         if inside and rules_text():
             print("Правила ниже действуют в этой сессии с этого ответа:\n")
             print(rules_text())
@@ -422,17 +419,17 @@ def set_state(value, inside):
         else:
             print("Правила придут в каждую сессию Claude Code (новую и уже открытую) со следующим сообщением.")
     else:
-        print("mnrh humanization выключена. Правила письма больше не обязательны.")
+        print("claudemeister humanization выключена. Правила письма больше не обязательны.")
         mark(sid, "primed", False)
 
 
 def usage():
-    print("mnrh claude humanize               состояние")
-    print("mnrh claude humanize on | off      включить или выключить во всех сессиях Claude Code")
-    print("mnrh claude humanize switch [on|off]   то же для /humanize; без аргумента переключает")
-    print("mnrh claude humanize rules         свод правил, который получает Claude")
-    print("mnrh claude humanize check <файл>  найти явные признаки нейросети в тексте (- читает stdin)")
-    print("mnrh claude humanize log           что проверка находила в ответах Claude")
+    print("claudemeister humanize                  состояние")
+    print("claudemeister humanize on | off         включить или выключить во всех сессиях Claude Code")
+    print("claudemeister humanize switch [on|off]  то же для /humanize; без аргумента переключает")
+    print("claudemeister humanize rules            свод правил, который получает Claude")
+    print("claudemeister humanize check <файл>     найти явные признаки нейросети в тексте (- читает stdin)")
+    print("claudemeister humanize log              что проверка находила в ответах Claude")
     print()
     print("Правила взяты из эссе Википедии «Признаки сгенерированности текста» (ВП:ПРГЕН). Хук SessionStart отдаёт")
     print("их в начале сессии и после сжатия контекста, UserPromptSubmit напоминает о них к каждому сообщению,")
@@ -440,12 +437,12 @@ def usage():
 
 
 def status():
-    print(f"mnrh humanization: {'включена' if enabled() else 'выключена'}. Правила: {tilde(RULES)}")
+    print(f"claudemeister humanization: {'включена' if enabled() else 'выключена'}. Правила: {tilde(RULES)}")
     missing = missing_hooks()
     if missing:
         print(f"! хуки не подключены ({', '.join(missing)}): Claude правил не получит. "
-              f"Подключит mnrh claude humanize on или mnrh claude setup")
-    print(f"Переключить: /humanize в Claude Code или mnrh claude humanize on|off. Лог проверок: {tilde(LOG)}")
+              f"Подключит claudemeister humanize on или claudemeister setup")
+    print(f"Переключить: /humanize в Claude Code или claudemeister humanize on|off. Лог проверок: {tilde(LOG)}")
 
 
 def main():

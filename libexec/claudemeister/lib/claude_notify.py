@@ -9,7 +9,7 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, read_config, settings_name, settings_path, tilde, write_config
+from mnrhlib import HOME, is_hook, read_config, settings_name, settings_path, tilde, write_config
 from swiftagent import SwiftAgent
 import ntfy_alert
 import telegram
@@ -64,21 +64,21 @@ SELECTED = {
 
 
 def usage():
-    print("mnrh claude notify              уведомления, когда Claude ждёт тебя: состояние")
-    print("mnrh claude notify on | off     включить или выключить")
-    print(f"mnrh claude notify after <сек>  о готовом ответе — только если ход шёл дольше (сейчас "
+    print("claudemeister notify              уведомления, когда Claude ждёт тебя: состояние")
+    print("claudemeister notify on | off     включить или выключить")
+    print(f"claudemeister notify after <сек>  о готовом ответе — только если ход шёл дольше (сейчас "
           f"{after()} с, по умолчанию {DEFAULT_AFTER})")
-    print("mnrh claude notify sound on|off звук")
-    print("mnrh claude notify test         показать пробное уведомление")
-    print("mnrh claude notify telegram     ещё и в Telegram, когда ты не за Mac: подключить бота")
-    print(f"mnrh claude notify phone away   ещё и в Tossling на телефон (канал {ntfy_alert.CLAUDE_TOPIC}), когда ты не за Mac")
+    print("claudemeister notify sound on|off звук")
+    print("claudemeister notify test        показать пробное уведомление")
+    print("claudemeister notify telegram    ещё и в Telegram, когда ты не за Mac: подключить бота")
+    print(f"claudemeister notify phone away  ещё и в Tossling на телефон (канал {ntfy_alert.CLAUDE_TOPIC}), когда ты не за Mac")
     print("  … phone always | off | test")
     print("  … telegram test | off | always | away <сек>")
     print()
     print("Уведомление приходит, если Claude просит разрешение или задаёт вопрос, долго ждёт ответа")
     print("или закончил долгий ход, а ты смотришь не на его вкладку. Нажатие переключает на неё")
     print("(Terminal и iTerm2 — на саму вкладку, в IDE — на окно приложения).")
-    print("Ставит mnrh claude setup: хуки UserPromptSubmit, Stop и Notification.")
+    print("Ставит claudemeister setup: хуки UserPromptSubmit, Stop и Notification.")
 
 
 def enabled():
@@ -293,8 +293,8 @@ def hook():
     project = "~" if cwd.rstrip("/") == HOME else os.path.basename(cwd.rstrip("/")) or "Claude"
     title = session_title(sid, payload.get("transcript_path"))
     if on_mac and ensure_app():
-        mnrh = mnrh_path()
-        click = f"{shlex.quote(mnrh)} claude focus {shlex.quote(tty)} {shlex.quote(bundle)}" if mnrh else None
+        cm = cm_path()
+        click = f"{shlex.quote(cm)} focus {shlex.quote(tty)} {shlex.quote(bundle)}" if cm else None
         post(f"{project}: {head}", title, body, sid, click)
     if to_phone:
         try:
@@ -318,9 +318,9 @@ def log_error(text):
         f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {text}\n")
 
 
-def mnrh_path():
-    from claude_restart import MNRH
-    return MNRH if os.access(MNRH, os.X_OK) else None
+def cm_path():
+    from mnrhlib import CM
+    return CM if os.access(CM, os.X_OK) else None
 
 
 def status():
@@ -332,13 +332,13 @@ def status():
         with open(os.path.join(HOME, ".claude", "settings.json")) as f:
             hooks = json.load(f).get("hooks", {})
         have = [e for e in ("UserPromptSubmit", "Stop", "Notification")
-                if any("claude notify-hook" in h.get("command", "") for x in hooks.get(e, []) for h in x.get("hooks", []))]
+                if any(is_hook(h.get("command", ""), "notify-hook") for x in hooks.get(e, []) for h in x.get("hooks", []))]
     except (OSError, ValueError, AttributeError):
         have = []
-    print("Хуки Claude Code: " + (", ".join(have) if have else "не стоят — mnrh claude setup"))
+    print("Хуки Claude Code: " + (", ".join(have) if have else "не стоят — claudemeister setup"))
     print(telegram.describe())
     mode = ntfy_alert.phone_mode()
-    print("Tossling: " + {"off": "выключено — mnrh claude notify phone away",
+    print("Tossling: " + {"off": "выключено — claudemeister notify phone away",
                        "away": f"когда ты не за Mac, канал «{ntfy_alert.CLAUDE_TOPIC}»",
                        "always": f"всегда, канал «{ntfy_alert.CLAUDE_TOPIC}»"}[mode])
 
@@ -349,10 +349,10 @@ def test():
         return 1
     tty = os.ttyname(0) if os.isatty(0) else ""
     bundle = os.environ.get("__CFBundleIdentifier", "")
-    mnrh = mnrh_path()
-    click = f"{shlex.quote(mnrh)} claude focus {shlex.quote(tty)} {shlex.quote(bundle)}" if mnrh and tty else None
+    cm = cm_path()
+    click = f"{shlex.quote(cm)} focus {shlex.quote(tty)} {shlex.quote(bundle)}" if cm and tty else None
     print("Отправляю пробное уведомление. В первый раз macOS спросит, можно ли mnrh Notify их показывать — разреши.")
-    r = post("mnrh: пробное уведомление", "Claude Code", "Нажми, чтобы вернуться в эту вкладку",
+    r = post("claudemeister: пробное уведомление", "Claude Code", "Нажми, чтобы вернуться в эту вкладку",
              "00000000-0000-0000-0000-000000000000", click, wait=True)
     if r == "ok":
         print("✓ показано")
@@ -386,7 +386,7 @@ def phone(rest):
             return 1
         print("Отправил пробное уведомление")
         return 0
-    print(f"В Tossling: {ntfy_alert.phone_mode()}. mnrh claude notify phone away | always | off | test")
+    print(f"В Tossling: {ntfy_alert.phone_mode()}. claudemeister notify phone away | always | off | test")
     return 0
 
 

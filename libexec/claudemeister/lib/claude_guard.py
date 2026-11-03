@@ -294,7 +294,7 @@ def decide(payload):
     if mode not in ("bypassPermissions", "auto", "dontAsk"):
         log(f"ask   {rule:<14} {what}")
         hold_badge(payload.get("session_id"), rule)
-        return {"permissionDecision": "ask", "permissionDecisionReason": f"mnrh guard: {why}"}
+        return {"permissionDecision": "ask", "permissionDecisionReason": f"claudemeister guard: {why}"}
     sid = payload.get("session_id")
     key = call_key(sid, tool, inp)
     pending = load_pending(sid)
@@ -303,13 +303,13 @@ def decide(payload):
         pending.pop(key)
         save_pending(sid, pending)
         log(f"allow {rule:<14} {what}")
-        return {"permissionDecision": "allow", "permissionDecisionReason": "mnrh guard: пользователь разрешил"}
+        return {"permissionDecision": "allow", "permissionDecisionReason": "claudemeister guard: пользователь разрешил"}
     pending[key] = time.time()
     save_pending(sid, pending)
     log(f"hold  {rule:<14} {what}")
     hold_badge(sid, rule)
     return {"permissionDecision": "deny", "permissionDecisionReason": (
-        f"mnrh guard: {why}. Это не отказ: спроси пользователя одним коротким вопросом, выполнить ли это, и объясни "
+        f"claudemeister guard: {why}. Это не отказ: спроси пользователя одним коротким вопросом, выполнить ли это, и объясни "
         f"зачем. Если он ответит «да» — повтори ровно этот же вызов, и он пройдёт. Если нет — не делай и не ищи "
         f"обходной путь.")}
 
@@ -334,11 +334,11 @@ def hook():
 
 
 def usage():
-    print("mnrh claude guard                   состояние и правила")
-    print("mnrh claude guard on | off          включить или выключить совсем")
-    print("mnrh claude guard skip <правило>    не проверять правило; unskip <правило> — вернуть")
-    print("mnrh claude guard test '<команда>'  что сделает guard с этой командой (в папке, где запущен)")
-    print("mnrh claude guard log               последние решения")
+    print("claudemeister guard                   состояние и правила")
+    print("claudemeister guard on | off          включить или выключить совсем")
+    print("claudemeister guard skip <правило>    не проверять правило; unskip <правило> — вернуть")
+    print("claudemeister guard test '<команда>'  что сделает guard с этой командой (в папке, где запущен)")
+    print("claudemeister guard log               последние решения")
     print()
     print("Хук PreToolUse следит только за чтением и удалением секретов и ключей. В обычном режиме Claude Code")
     print("спросит разрешение сам. В auto Claude спросит тебя в чате: ответишь «да» — этот вызов пройдёт.")
@@ -346,7 +346,7 @@ def usage():
 
 def status():
     skip = skipped()
-    print(f"mnrh guard: {'включён' if enabled() else 'выключен'}. Лог: {tilde(LOG)}")
+    print(f"claudemeister guard: {'включён' if enabled() else 'выключен'}. Лог: {tilde(LOG)}")
     for rule, text in RULES.items():
         mark = "  выкл" if rule in skip else "  вкл "
         print(f"{mark} {rule:<11} {text}")
@@ -367,7 +367,7 @@ def main():
     if cmd in ("on", "off"):
         write_config(guard=cmd)
         sync_badge(cmd == "on")
-        print(f"mnrh guard {'включён' if cmd == 'on' else 'выключен'}")
+        print(f"claudemeister guard {'включён' if cmd == 'on' else 'выключен'}")
         return 0
     if cmd in ("skip", "unskip") and len(rest) == 2:
         if rest[1] not in RULES:

@@ -20,16 +20,16 @@ UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 
 def usage():
-    print("mnrh claude sessions                  сохранённые сессии: выбрать стрелками, продолжить, перенести, удалить")
-    print("mnrh claude sessions -l               просто список")
-    print("mnrh claude sessions resume <id> [-n] продолжить в её папке (по умолчанию через caffeinate, -n обычная)")
-    print("mnrh claude sessions mv <id> <папка>  перенести в другую папку: путь, имя проекта из папки проектов или root")
-    print("mnrh claude sessions rm <id>... [-y]  удалить вместе с историей запросов этой сессии")
-    print("mnrh claude sessions clean [-y]       битые ссылки, сессии без единого ответа, папки удалённых проектов")
-    print("mnrh claude sessions search <слова>   поиск по всем сессиям; -p <проект>, -d <дней>")
-    print("mnrh claude sessions show <id> [N]    прочитать сессию с сообщения N (из search), -N — с конца")
-    print("mnrh claude sessions slim             что даст сжатие старых частей сессий (скриншоты, длинные выводы)")
-    print("mnrh claude sessions slim <id> [-y]   сжать; --copy — сжатую копию с новым id для проверки;")
+    print("claudemeister sessions     сохранённые сессии: выбрать стрелками, продолжить, перенести, удалить")
+    print("claudemeister sessions -l  просто список")
+    print("claudemeister sessions resume <id> [-n] продолжить в её папке (по умолчанию через caffeinate, -n обычная)")
+    print("claudemeister sessions mv <id> <папка>  перенести в другую папку: путь, имя проекта из папки проектов или root")
+    print("claudemeister sessions rm <id>... [-y]  удалить вместе с историей запросов этой сессии")
+    print("claudemeister sessions clean [-y]       битые ссылки, сессии без единого ответа, папки удалённых проектов")
+    print("claudemeister sessions search <слова>   поиск по всем сессиям; -p <проект>, -d <дней>")
+    print("claudemeister sessions show <id> [N]    прочитать сессию с сообщения N (из search), -N — с конца")
+    print("claudemeister sessions slim             что даст сжатие старых частей сессий (скриншоты, длинные выводы)")
+    print("claudemeister sessions slim <id> [-y]   сжать; --copy — сжатую копию с новым id для проверки;")
     print("                                      --undo — вернуть оригинал; --keep N — не трогать N последних")
     print("                                      отрезков между /compact (по умолчанию 2)")
     print()
@@ -278,8 +278,8 @@ def find(ss, prefix):
     if len(hits) == 1:
         return hits[0]
     if hits:
-        sys.exit(f"mnrh claude sessions: «{prefix}» подходит к {len(hits)} сессиям, дай больше символов id")
-    sys.exit(f"mnrh claude sessions: сессии «{prefix}» нет")
+        sys.exit(f"claudemeister sessions: «{prefix}» подходит к {len(hits)} сессиям, дай больше символов id")
+    sys.exit(f"claudemeister sessions: сессии «{prefix}» нет")
 
 
 def resolve_dest(arg):
@@ -293,9 +293,9 @@ def resolve_dest(arg):
     if len(names) == 1:
         return names[0]
     if names:
-        sys.exit(f"mnrh claude sessions: «{arg}» подходит к нескольким проектам: "
+        sys.exit(f"claudemeister sessions: «{arg}» подходит к нескольким проектам: "
                  + " ".join(os.path.basename(p) for p in names))
-    sys.exit(f"mnrh claude sessions: папки «{arg}» нет")
+    sys.exit(f"claudemeister sessions: папки «{arg}» нет")
 
 
 def dump(o):
@@ -338,7 +338,7 @@ def remove_if_empty(pdir):
 
 def move(s, dest):
     if s["running"]:
-        sys.exit("mnrh claude sessions: сессия сейчас открыта, сначала закрой её")
+        sys.exit("claudemeister sessions: сессия сейчас открыта, сначала закрой её")
     dest = os.path.abspath(dest)
     tdir = os.path.join(PROJECTS, encode(dest))
     if tdir == s["pdir"]:
@@ -346,7 +346,7 @@ def move(s, dest):
         return
     target = os.path.join(tdir, s["id"] + ".jsonl")
     if os.path.lexists(target):
-        sys.exit(f"mnrh claude sessions: в {tilde(tdir)} уже есть сессия с таким id")
+        sys.exit(f"claudemeister sessions: в {tilde(tdir)} уже есть сессия с таким id")
     os.makedirs(tdir, exist_ok=True)
     olds = {s["cwd"], s["started_in"]} - {None}
     changed = 0
@@ -371,7 +371,7 @@ def move(s, dest):
 
 def delete(s):
     if s["running"]:
-        sys.exit("mnrh claude sessions: сессия сейчас открыта, сначала закрой её")
+        sys.exit("claudemeister sessions: сессия сейчас открыта, сначала закрой её")
     for p in (s["path"], s["extra"]):
         if os.path.islink(p) or os.path.isfile(p):
             os.remove(p)
@@ -412,10 +412,10 @@ def forget_history(sid):
 
 def resume(s, mode):
     if s["running"]:
-        sys.exit("mnrh claude sessions: сессия уже открыта в другом окне")
+        sys.exit("claudemeister sessions: сессия уже открыта в другом окне")
     if not os.path.isdir(s["cwd"]):
-        sys.exit(f"mnrh claude sessions: папки {tilde(s['cwd'])} больше нет, перенеси сессию: "
-                 f"mnrh claude sessions mv {s['id'][:8]} <папка>")
+        sys.exit(f"claudemeister sessions: папки {tilde(s['cwd'])} больше нет, перенеси сессию: "
+                 f"claudemeister sessions mv {s['id'][:8]} <папка>")
     os.chdir(s["cwd"])
     print(f"-> {tilde(s['cwd'])} · {mode} · {s['title'] or s['id']}")
     sys.stdout.flush()
@@ -425,7 +425,7 @@ def resume(s, mode):
     try:
         os.execvp(cmd[0], cmd)
     except OSError as e:
-        sys.exit(f"mnrh claude sessions: не запустился {cmd[0]}: {e}")
+        sys.exit(f"claudemeister sessions: не запустился {cmd[0]}: {e}")
 
 
 def clean(assume_yes):
@@ -662,14 +662,14 @@ def slim_in_tab(sid):
             raise claude_slim.SlimError("сессия не найдена")
         if s["running"]:
             raise claude_slim.SlimError("сессия всё ещё открыта")
-        print(f"mnrh: сжимаю «{s['title'] or sid}»…", flush=True)
+        print(f"claudemeister: сжимаю «{s['title'] or sid}»…", flush=True)
         st = claude_slim.apply(s["path"], sid)
         claude_search.drop(sid)
     except claude_slim.SlimError as e:
-        print(f"mnrh: не сжал: {e}. Открываю как есть.")
+        print(f"claudemeister: не сжал: {e}. Открываю как есть.")
         slim_notice(sid, status="failed", error=str(e))
         return 1
-    print(f"mnrh: {slim_report(st)}")
+    print(f"claudemeister: {slim_report(st)}")
     slim_notice(sid, status="done", before=fmt_size(st["before"]), after=fmt_size(st["after"]), images=st["images"])
     return 0
 
@@ -684,7 +684,7 @@ def slim_cmd(args, yes):
         try:
             keep = max(1, int(args[args.index("--keep") + 1]))
         except (IndexError, ValueError):
-            sys.exit("mnrh claude sessions: после --keep нужно число")
+            sys.exit("claudemeister sessions: после --keep нужно число")
     ids = [a for a in args if not a.startswith("-") and not (args.index(a) > 0 and args[args.index(a) - 1] == "--keep")]
     ss = load() if not ids or not UUID.match(ids[0]) else []
     if not ids:
@@ -703,15 +703,15 @@ def slim_cmd(args, yes):
         for s, st in found:
             print(f"  {s['id'][:8]}  {clip(folder(s['cwd']), 20):<20}  {fmt_size(st['before']):>7} → "
                   f"{fmt_size(st['after']):>7}  {clip(s['title'] or '—', 50)}")
-        print(paint(f"Сжать: mnrh claude sessions slim <id>. Проверить сначала на копии: slim <id> --copy", "2"))
+        print(paint(f"Сжать: claudemeister sessions slim <id>. Проверить сначала на копии: slim <id> --copy", "2"))
         return 0
     s = fast_session(ids[0]) if UUID.match(ids[0]) else find(ss, ids[0])
     if not s:
-        sys.exit(f"mnrh claude sessions: сессии «{ids[0]}» нет")
+        sys.exit(f"claudemeister sessions: сессии «{ids[0]}» нет")
     if s["link"]:
-        sys.exit("mnrh claude sessions: это ссылка на другую сессию, сжимай оригинал")
+        sys.exit("claudemeister sessions: это ссылка на другую сессию, сжимай оригинал")
     if s["running"]:
-        sys.exit("mnrh claude sessions: сессия сейчас открыта, сначала закрой её")
+        sys.exit("claudemeister sessions: сессия сейчас открыта, сначала закрой её")
     try:
         if "--undo" in args:
             added = claude_slim.undo(s["path"], s["id"])
@@ -722,7 +722,7 @@ def slim_cmd(args, yes):
             st = claude_slim.copy(s["path"], s["id"], s["title"] or s["id"][:8], keep)
             print(f"Сжатая копия: {slim_report(st)}. Проверка: всё, что уходит модели, совпадает побайтно.")
             print(f"Открой её и спроси про последнюю работу: cd {shlex_quote(s['cwd'])} && claude --resume {st['new_sid']}")
-            print(paint(f"Удалить копию потом: mnrh claude sessions rm {st['new_sid'][:8]}", "2"))
+            print(paint(f"Удалить копию потом: claudemeister sessions rm {st['new_sid'][:8]}", "2"))
             return 0
         _, prot, st = claude_slim.plan(s["path"], keep)
         if not st:
@@ -742,7 +742,7 @@ def slim_cmd(args, yes):
         print(f"Готово: {slim_report(st)}. Проверка пройдена: всё, что уходит модели, совпадает побайтно.")
         print(paint(f"Оригинал: {tilde(st['backup'])}", "2"))
     except claude_slim.SlimError as e:
-        sys.exit(f"mnrh claude sessions slim: {e}. Ничего не изменено.")
+        sys.exit(f"claudemeister sessions slim: {e}. Ничего не изменено.")
     return 0
 
 
@@ -801,11 +801,11 @@ def main():
             i += 1
         days = opts.get("-d")
         if days is not None and not days.isdigit():
-            sys.exit("mnrh claude sessions: после -d нужно число дней")
+            sys.exit("claudemeister sessions: после -d нужно число дней")
         text, err = claude_search.search(" ".join(rest), project=opts.get("-p"), days=int(days) if days else None,
                                          exclude=[os.environ["CLAUDE_CODE_SESSION_ID"]]
                                          if os.environ.get("CLAUDE_CODE_SESSION_ID") else None)
-        print(text.replace("session_read с id и at=<номер после #>", "mnrh claude sessions show <id> <номер после #>"))
+        print(text.replace("session_read с id и at=<номер после #>", "claudemeister sessions show <id> <номер после #>"))
         return 1 if err else 0
     elif cmd == "show" and len(args) in (2, 3):
         at = None
@@ -813,7 +813,7 @@ def main():
             try:
                 at = int(args[2].lstrip("#"))
             except ValueError:
-                sys.exit("mnrh claude sessions: номер сообщения — число, например 120 или -10")
+                sys.exit("claudemeister sessions: номер сообщения — число, например 120 или -10")
         text, err = claude_search.read(args[1], at=at)
         print(text)
         return 1 if err else 0

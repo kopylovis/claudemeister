@@ -132,8 +132,8 @@ def handle(a):
 def main():
     args = sys.argv[1:]
     if args[:1] in (["-h"], ["--help"]):
-        print("mnrh shot                   список открытых окон")
-        print("mnrh shot <приложение> [заголовок]   снимок переднего окна приложения в ~/.cache/mnrh/shots")
+        print("claudemeister shot                           список открытых окон")
+        print("claudemeister shot <приложение> [заголовок]  снимок переднего окна приложения в ~/.cache/mnrh/shots")
         print()
         print(f"Снимки уменьшаются до {MAX_SIDE} px по большей стороне и удаляются через {KEEP_DAYS} дня.")
         print("Нужно разрешение «Запись экрана» для терминала. В Claude Code: /shot или инструмент window_screenshot.")
