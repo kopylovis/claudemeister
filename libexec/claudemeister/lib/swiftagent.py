@@ -1,7 +1,7 @@
 """Помощник на Swift, который живёт в фоне как LaunchAgent: сборка в .app, автозапуск, состояние.
 
-Здесь на нем приложение уведомлений mnrh Notify (в mnrh та же копия собирает mnrh scroll). Исходник —
-share/claudemeister/<name>/main.swift. Собирается в ~/Library/Application Support/mnrh/<display>.app только при изменении исходника: macOS
+Здесь на нем приложение уведомлений claudemeister Notify (в mnrh такая же копия собирает mnrh scroll). Исходник —
+share/claudemeister/<name>/main.swift. Собирается в ~/Library/Application Support/claudemeister/<display>.app только при изменении исходника: macOS
 выдаёт разрешения (Универсальный доступ и т. п.) конкретной сборке, и лишняя пересборка их сбросит.
 """
 import hashlib
@@ -28,8 +28,8 @@ class SwiftAgent:
         self.title = title or display
         self.stable_id = stable_id
         self.src = os.path.join(ROOT, "share", "claudemeister", name, "main.swift")
-        self.app = os.path.join(app_dir or os.path.join(HOME, "Library", "Application Support", "mnrh"), f"{display}.app")
-        self.bin = os.path.join(self.app, "Contents", "MacOS", f"mnrh-{name}")
+        self.app = os.path.join(app_dir or os.path.join(HOME, "Library", "Application Support", "claudemeister"), f"{display}.app")
+        self.bin = os.path.join(self.app, "Contents", "MacOS", f"claudemeister-{name}")
         self.stamp = os.path.join(self.app, "Contents", "Resources", "source.sha256")
         self.plist = os.path.join(HOME, "Library", "LaunchAgents", f"{label}.plist")
         self.state_file = os.path.join(HOME, ".cache", "mnrh", f"{name}.json")

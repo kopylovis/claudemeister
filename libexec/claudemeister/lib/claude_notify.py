@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,7 +15,9 @@ from swiftagent import SwiftAgent
 import ntfy_alert
 import telegram
 
-AGENT = SwiftAgent("notify", "mnrh Notify", "com.mnrh.notify")
+AGENT = SwiftAgent("notify", "claudemeister Notify", "com.claudemeister.notify")
+# Так приложение называлось, пока было частью mnrh. После сборки нового его удаляем.
+OLD_APP = os.path.join(HOME, "Library", "Application Support", "mnrh", "mnrh Notify.app")
 STATE = os.path.join(HOME, ".cache", "mnrh", "notify")
 DEFAULT_AFTER = 20
 TERMINALS = {"com.apple.Terminal": "Terminal", "com.googlecode.iterm2": "iTerm2"}
@@ -104,7 +107,10 @@ def ensure_app():
             AGENT.build()
     except SystemExit:
         return False
-    return os.access(AGENT.bin, os.X_OK)
+    ok = os.access(AGENT.bin, os.X_OK)
+    if ok and os.path.isdir(OLD_APP):
+        shutil.rmtree(OLD_APP, ignore_errors=True)
+    return ok
 
 
 def launch(args):
@@ -351,14 +357,14 @@ def test():
     bundle = os.environ.get("__CFBundleIdentifier", "")
     cm = cm_path()
     click = f"{shlex.quote(cm)} focus {shlex.quote(tty)} {shlex.quote(bundle)}" if cm and tty else None
-    print("Отправляю пробное уведомление. В первый раз macOS спросит, можно ли mnrh Notify их показывать — разреши.")
+    print("Отправляю пробное уведомление. В первый раз macOS спросит, можно ли claudemeister Notify их показывать — разреши.")
     r = post("claudemeister: пробное уведомление", "Claude Code", "Нажми, чтобы вернуться в эту вкладку",
              "00000000-0000-0000-0000-000000000000", click, wait=True)
     if r == "ok":
         print("✓ показано")
         return 0
     if r.startswith("denied"):
-        print(f"✗ macOS не разрешает уведомления: {settings_path('settings', 'notifications')} → mnrh Notify → "
+        print(f"✗ macOS не разрешает уведомления: {settings_path('settings', 'notifications')} → claudemeister Notify → "
               f"{settings_name('allow')}")
     else:
         print(f"✗ не получилось: {r}")

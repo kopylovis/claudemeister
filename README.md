@@ -470,9 +470,12 @@ Terminal и iTerm2 (по tty, как `/restart`), а в Android Studio, VS Code 
 приложения. Новое уведомление той же сессии заменяет старое, а после твоего следующего
 запроса оно убирается из Центра уведомлений.
 
-Показывает их маленькое приложение `~/Library/Application Support/mnrh/mnrh Notify.app`
+Показывает их маленькое приложение `~/Library/Application Support/claudemeister/claudemeister Notify.app`
 (собирается из `share/claudemeister/notify/main.swift`). В первый раз macOS спросит, можно ли ему
 показывать уведомления, а при первом нажатии — можно ли ему управлять Terminal или iTerm2.
+До claudemeister 1.2 оно называлось mnrh Notify. После обновления новое приложение соберется при первом
+уведомлении, старое удалится, и macOS снова спросит разрешение. Строку mnrh Notify в настройках уведомлений
+можно удалить вручную.
 `claudemeister notify test` — пробное уведомление, `notify off` / `on` — выключить и
 включить, `notify sound off` — без звука.
 
@@ -490,7 +493,7 @@ Telegram. Ошибки отправки пишутся в `~/.cache/mnrh/notify/
 `phone always` — всегда, `phone off` — выключить, `phone test` — пробное. Уходят в канал `claude`,
 вопросы и просьбы о разрешении — с высоким приоритетом. На телефоне: Tossling → Уведомления → + → `claude`.
 
-Иконка mnrh Notify — `share/claudemeister/icon.png`, 1024×1024,
+Иконка claudemeister Notify — `share/claudemeister/icon.png`, 1024×1024,
 картинка до края без прозрачности: macOS 26 сама скругляет её, а иконку с полями или
 прозрачными углами кладёт на серую подложку. Из PNG при сборке делается `AppIcon.icns`;
 при смене иконки помощник пересобирается сам. Центр уведомлений помнит старую иконку до
