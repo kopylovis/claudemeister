@@ -231,6 +231,104 @@ class ParallelPr(unittest.TestCase):
         self.assertEqual(self.merges(), [])
 
 
+class Start(unittest.TestCase):
+    """start без окна: open_claude и поиск текущей сессии подменены."""
+
+    def setUp(self):
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.env = dict(os.environ)
+        gitconf = os.path.join(self.tmp, "gitconfig")
+        open(gitconf, "w").close()
+        self.dev = os.path.join(self.tmp, "dev")
+        self.root = os.path.join(self.dev, "demo")
+        os.makedirs(self.root)
+        os.environ.update({
+            "GIT_CONFIG_GLOBAL": gitconf, "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "MNRH_PROJECTS": self.dev})
+        sh(self.root, "init", "-q", "-b", "main")
+        self.write(".gitignore", ".env\n.env.*\nlocal.properties\nconfig/secrets.json\nnode_modules/\n")
+        self.write("app.txt", "app\n")
+        sh(self.root, "add", ".")
+        sh(self.root, "commit", "-q", "-m", "init")
+        import claude_open
+        import claude_proc
+        self.saved = claude_open.open_claude, claude_open.trusted, claude_proc.current_sid
+        self.opened = []
+        claude_open.open_claude = lambda args, cm: (self.opened.append(args) or ("Открыл окно.", False))
+        claude_open.trusted = lambda path: True
+        claude_proc.current_sid = lambda: self.sid
+        self.sid = None
+
+    def tearDown(self):
+        import claude_open
+        import claude_proc
+        claude_open.open_claude, claude_open.trusted, claude_proc.current_sid = self.saved
+        os.environ.clear()
+        os.environ.update(self.env)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write(self, rel, text="x\n"):
+        path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+
+    def worktree(self):
+        return p.entries(self.root)[0]["path"]
+
+    def test_worktreeinclude_copies_only_ignored_matches(self):
+        for rel in (".env", ".env.local", "config/secrets.json", "local.properties", "notes.txt",
+                    "node_modules/x/a.js"):
+            self.write(rel)
+        self.write(".worktreeinclude", ".env\n.env.local\nconfig/secrets.json\nnotes.txt\napp.txt\n")
+        text, bad = p.start("починить вход", self.root)
+        self.assertFalse(bad, text)
+        path = self.worktree()
+        for rel in (".env", ".env.local", "config/secrets.json"):
+            self.assertTrue(os.path.isfile(os.path.join(path, rel)), rel)
+        # не игнорируется git (notes.txt) или не названо в .worktreeinclude (local.properties) — не копируется
+        for rel in ("notes.txt", "local.properties", "node_modules/x/a.js"):
+            self.assertFalse(os.path.exists(os.path.join(path, rel)), rel)
+        self.assertIn("по .worktreeinclude", text)
+
+    def test_without_worktreeinclude_the_old_list_is_copied(self):
+        for rel in (".env", ".env.prod", "local.properties", "fastlane/.env", "config/secrets.json"):
+            self.write(rel)
+        text, bad = p.start("починить вход", self.root)
+        self.assertFalse(bad, text)
+        path = self.worktree()
+        for rel in (".env", ".env.prod", "local.properties", "fastlane/.env"):
+            self.assertTrue(os.path.isfile(os.path.join(path, rel)), rel)
+        self.assertFalse(os.path.exists(os.path.join(path, "config/secrets.json")))
+        self.assertIn("своего .worktreeinclude у проекта нет", text)
+
+    def test_plain_start_does_not_resume(self):
+        text, bad = p.start("починить вход", self.root, permission="auto")
+        self.assertFalse(bad, text)
+        args = self.opened[0]
+        self.assertEqual(args["flags"], ["--permission-mode", "auto"])
+        self.assertEqual(args["path"], self.worktree())
+        self.assertIn("Задача: починить вход", args["prompt"])
+
+    def test_fork_resumes_this_session_in_the_worktree(self):
+        self.sid = "11111111-2222-3333-4444-555555555555"
+        text, bad = p.handle("parallel_task", {"task": "починить вход", "project": self.root, "fork": True})
+        self.assertFalse(bad, text)
+        args = self.opened[0]
+        self.assertEqual(args["flags"][:3], ["--resume", self.sid, "--fork-session"])
+        self.assertEqual(args["path"], self.worktree())
+        self.assertIn("форк", args["prompt"])
+        self.assertIn(self.worktree(), args["prompt"])
+        self.assertIn("форк сессии 11111111", text)
+
+    def test_fork_outside_claude_creates_nothing(self):
+        text, bad = p.start("починить вход", self.root, fork=True)
+        self.assertTrue(bad)
+        self.assertEqual(self.opened, [])
+        self.assertEqual(p.entries(self.root), [])
+
+
 class GithubRepo(unittest.TestCase):
     def test_urls(self):
         self.assertEqual(p.github_repo("https://github.com/acme/demo.git"), "acme/demo")

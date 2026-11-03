@@ -272,6 +272,8 @@ def drop_junk(path, why):
 def warm_up(pdir, keep):
     sweep(pdir, keep)
     claude_search.refresh()
+    import claude_usage
+    claude_usage.refresh()
 
 
 def sweep(pdir, keep):
@@ -287,9 +289,29 @@ def sweep(pdir, keep):
         drop_junk(path, "уборка при старте")
 
 
+def remember_open(sid, payload):
+    """Для claudemeister restore: что было открыто и как запущено. Процесс Claude ищем здесь, в фоне его уже не найти."""
+    if os.environ.get("MNRH_CHILD") == "1" or os.environ.get("CLAUDE_CODE_SKIP_PROMPT_HISTORY") == "1":
+        return
+    try:
+        pid = find_claude()
+    except RestartError:
+        return
+    tty = ps("tty", pid)
+    if not tty or "?" in tty:
+        return
+    import claude_live
+    tty = tty if tty.startswith("/dev/") else "/dev/" + tty
+    background(claude_live.remember, sid, payload.get("cwd") or os.getcwd(), pid, tty,
+               os.environ.get("__CFBundleIdentifier", ""), bool(os.environ.get("MNRH_PROXY")))
+
+
 def session_end():
     payload = hook_payload()
     sid, path = payload.get("session_id"), payload.get("transcript_path")
+    if sid and UUID_RE.match(sid):
+        import claude_live
+        claude_live.forget(sid)
     if not sid or not UUID_RE.match(sid) or not path or not path.endswith(sid + ".jsonl"):
         return 0
     try:
@@ -356,6 +378,7 @@ def notice():
     path = payload.get("transcript_path")
     if path and os.path.isdir(os.path.dirname(path)):
         background(warm_up, os.path.dirname(path), sid)
+    remember_open(sid, payload)
     n = read_notice(sid)
     messages, out = [notice_text(n)] if n else [], {}
     if brief_wanted(payload, n):

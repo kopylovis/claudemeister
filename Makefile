@@ -34,6 +34,8 @@ test:
 	@./bin/claudemeister setup --country KZ --bogus 2>&1 >/dev/null | grep -q 'не знаю --bogus'
 	@./bin/claudemeister setup --country KAZ 2>/dev/null; test $$? -eq 2
 	@./bin/claudemeister setup -h | grep -q -- '--country'
+	@./bin/claudemeister doctor -h | grep -q 'проверить установку'
+	@./bin/claudemeister ps -h | grep -q restore
 	@HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent-cm /usr/bin/python3 libexec/claudemeister/lib/claude_setup.py pending | grep -q '^fresh commands .*proxy promptsill$$'
 	@HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent-cm /usr/bin/python3 libexec/claudemeister/lib/claude_setup.py check </dev/null | wc -c | grep -q '^ *0$$'
 	@./bin/claudemeister buildlog -h | grep -q PostToolUse
@@ -71,9 +73,15 @@ test:
 	@printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/claudemeister mcp | grep -q '"deps_outdated"'
 	@./bin/claudemeister notify >/dev/null
 	@echo junk | ./bin/claudemeister notify-hook | wc -c | grep -q '^ *0$$'
+	@echo junk | ./bin/claudemeister approve-hook | wc -c | grep -q '^ *0$$'
+	@echo '{"session_id":"00000000-0000-0000-0000-000000000000","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}' | XDG_CONFIG_HOME=/nonexistent-cm ./bin/claudemeister approve-hook | wc -c | grep -q '^ *0$$'
+	@XDG_CONFIG_HOME=/nonexistent-cm ./bin/claudemeister notify telegram approve | grep -q 'approve on'
 	@echo '{"session_id":"00000000-0000-0000-0000-000000000000","hook_event_name":"UserPromptSubmit","user_input":"x"}' | ./bin/claudemeister notify-hook | wc -c | grep -q '^ *0$$'
 	@./bin/claudemeister -h >/dev/null
 	@./bin/claudemeister sessions -h >/dev/null
+	@./bin/claudemeister usage -h | grep -q -- '--days'
+	@./bin/claudemeister usage --days x 2>/dev/null; test $$? -eq 2
+	@printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/claudemeister mcp | grep -q '"usage_report"'
 	@./bin/claudemeister sessions -l >/dev/null
 	@./bin/claudemeister sessions search mnrh-no-such-word-zq >/dev/null
 	@./bin/claudemeister sessions choose /nonexistent-cm | grep -qx new

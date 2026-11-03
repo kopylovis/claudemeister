@@ -18,7 +18,11 @@ claudemeister root           in the home folder
 claudemeister ... -x         through your own VPS, this session only
 claudemeister ... -i         nothing written to disk: no transcript, no prompt history
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
+claudemeister usage          tokens and active time per project and model over the last N days
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
+claudemeister ps             open Claude Code sessions: which wait for you; pick one to jump to its tab
+claudemeister restore        reopen the sessions that were open when the Mac rebooted or Claude crashed
+claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
 claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
 claudemeister fresh          from inside Claude: new untitled session, this one stays in /resume
@@ -57,12 +61,24 @@ setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If yo
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
 
-Update with `brew upgrade claudemeister`. `claudemeister setup --remove` takes everything out of Claude Code,
+Every session start records the session in `~/.cache/mnrh/open/` with its folder, terminal tab, caffeinate,
+proxy and launch flags, and a normal exit removes the record. `claudemeister ps` lists the open sessions with
+their state (waiting for you, working, idle) and jumps to the chosen one's tab in Terminal or iTerm2. After a
+reboot, a macOS update or a crash, `claudemeister restore` reopens the sessions whose records are left, each in
+its own window with `--resume`, the same mode, proxy and flags. Sessions started with `-i` aren't recorded.
+
+`claudemeister doctor` checks all of it in one go: Claude Code on PATH, the commands and whether they match this
+version, the hooks, transcript retention, the status line, the MCP server answering `tools/list`, the zsh hook,
+the notification app and the proxy. It exits with 1 when something is broken and says what fixes it.
+
+Update with `brew upgrade claudemeister`. Open sessions pick up the new version on their own: before each
+request the MCP server checks whether its code changed (a `brew upgrade` or a `git pull` in a checkout) and, if
+so, replaces itself with the new one on the same connection, without losing the request. `claudemeister setup --remove` takes everything out of Claude Code,
 and `brew uninstall claudemeister` removes the program.
 
 The projects folder is `~/Developer` by default. Set another one with a `projects=<path>` line in
 `~/.config/mnrh/config` or with `MNRH_PROJECTS=<path>`. setup puts the read-only MCP tools (`session_search`,
-`session_read`, `deps_outdated` and others) into `permissions.allow` in `~/.claude/settings.json`, so Claude
+`session_read`, `usage_report`, `deps_outdated` and others) into `permissions.allow` in `~/.claude/settings.json`, so Claude
 doesn't ask before using them.
 
 ### From source, for development
@@ -220,8 +236,12 @@ the images and full long outputs in that old part of the conversation.
 
 The same search is available to Claude as the MCP tools `session_search` and `session_read`. Ask "how did we
 set up RuStore signing in sightra?" and Claude finds it in past sessions and reads the right spot. The index
-covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools) and
-the summaries after `/compact`. Tool outputs and system messages aren't indexed. All words must appear in one
+covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools), the
+errors those tools returned and the summaries after `/compact`. Normal tool output and system messages aren't
+indexed. Of a long error only the first 600 and the last 900 characters are kept, and Claude Code's own refusals
+(permission denied, "read the file first") are skipped. `roles=["error"]` (in the terminal
+`claudemeister sessions search -r error <words>`) searches errors only, to find how the same error was fixed
+before. All words must appear in one
 message (if no message has them all, messages with at least half of them are shown). Case and word form don't
 matter: words are reduced to their stems (a Snowball stemmer for Russian, the first Porter steps for English),
 so `сессия` finds `сессии` and `signing` finds `signed`. Hyphens split words, and a hyphenated word or a phrase in
@@ -237,6 +257,23 @@ all sessions takes a few seconds (4 s for 700 MB of transcripts). After that onl
 takes under 0.1 s. The index is refreshed in the background when each session starts (the
 `SessionStart` hook). When a session is deleted, including through `/forget` and `sessions rm`, its index goes
 with it.
+
+## Usage: `claudemeister usage`
+
+`claudemeister usage [--days N] [--project P] [--top N]` shows how much Claude Code was used over the last N days
+(7 by default, today included; `--days 0` means all time): per project, the number of sessions, active time,
+model requests and tokens by kind (input without cache, output, cache read, cache write); per model, the same
+without time; and the heaviest sessions by total tokens, with their titles. Tokens come from the `usage` field
+of the model's answers in the transcripts, counted once per answer even when the answer spans several lines,
+subagents included. Active time is the sum of gaps under 5 minutes between transcript events, with the
+subagents' time merged in, so a long break or a night with an open session doesn't count. There are no dollar
+amounts: on a subscription tokens and time are what matter. Claude gets the same report through the
+`usage_report` MCP tool ("how many tokens did kcalm take this week?").
+
+Per-day totals are cached in `~/.cache/mnrh/usage/<id>.json` (260 KB for 700 MB of transcripts) and, like the
+search index, only new lines are read. The first run over all sessions takes about 3 s, later ones 0.05 s, and
+the cache is also refreshed in the background when a session starts. A rewritten session (`slim`) is counted
+again from scratch, and a deleted one loses its cache.
 
 ## Outdated dependencies: `claudemeister deps`
 
@@ -261,7 +298,7 @@ cached for 6 hours. Claude gets the same through the `deps_outdated` tool.
 | `/where` | where we left off: git, the last session in this project, backlog, what's next |
 | `/todo` | backlog: `/todo` lists, `/todo <text>` adds, `/todo done 2` marks done |
 | `/release-notes` | "What's new" in Russian and English for fastlane |
-| `/parallel <task>` | the same task in its own branch in a second window; `/parallel list` |
+| `/parallel <task>` | the same task in its own branch in a second window; `--fork` takes this conversation along; `/parallel list` |
 | `/shot <app> [question]` | screenshot of a window that Claude looks at and answers about |
 | `/ask <project> <question>` | an answer from another project by a separate Claude |
 
@@ -297,12 +334,30 @@ the text from `notes:` or `RELEASE_NOTES`, so the answer ends with a ready comma
 ## Parallel tasks
 
 `/parallel <task>` (or "do this in parallel") creates a `parallel/<from the task>` branch and a git worktree from
-the current commit in `~/Developer/.worktrees/<project>/`, copies the untracked `local.properties`, `.env*` and
-`fastlane/.env*` into it, and opens a second Claude with the task and Remote Control in a new Terminal or iTerm2
-window. It works only in its own folder and commits to its own branch without merging or pushing. The
-permission mode is the usual one: questions arrive as notifications, and clicking one opens its tab.
-`--permission-mode auto` skips the questions. Uncommitted changes in the main folder don't make it into the
-worktree.
+the current commit in `~/Developer/.worktrees/<project>/`, copies local untracked files into it (see below), and
+opens a second Claude with the task and Remote Control in a new Terminal or iTerm2 window. It works only in its own
+folder and commits to its own branch without merging or pushing. The permission mode is the usual one: questions
+arrive as notifications, and clicking one opens its tab. `--permission-mode auto` skips the questions.
+Uncommitted changes in the main folder don't make it into the worktree.
+
+Which files are copied follows Claude Code's own
+[`.worktreeinclude`](https://code.claude.com/docs/en/worktrees#copy-gitignored-files-into-worktrees): if the
+project has that file in its root, its patterns (`.gitignore` syntax) pick the files, and only files git ignores
+are copied, so tracked files are never duplicated. The same file then also works for `claude --worktree` and for
+subagent worktrees. A project without `.worktreeinclude` gets the old list: untracked `local.properties`, `.env*`
+and `fastlane/.env*`, and the reply says so.
+
+`/parallel --fork <task>` (`fork: true` in `parallel_task`, `--fork` on the command line from inside Claude) opens
+the second Claude with a copy of the current conversation, so it knows everything said so far:
+`claude --resume <id> --fork-session` started in the worktree. Claude Code finds a session by id in the
+project's git worktrees, and a fork starts in the folder it was launched from, so the copy works in the worktree
+while the original session stays as it was. Without `--fork` the second Claude starts a new session with only
+the task.
+
+claudemeister keeps creating the worktree itself instead of using `claude --worktree`: that flag puts worktrees
+in `<repo>/.claude/worktrees/` on a `worktree-<name>` branch from the default branch of the remote, while
+`/parallel` branches from the current commit, records the base branch for `merge` and `pr`, and opens its own
+window with caffeinate and Remote Control. `--tmux` needs `--worktree`, so it isn't used either.
 
 ```
 claudemeister parallel list            branches, commits, whether Claude is working there
@@ -497,10 +552,39 @@ from the clipboard and clears it), then press Start in the chat with the bot. Th
 `telegram off` disconnects and deletes the token. If you're looking at Claude's tab but have walked away, the
 notification only goes to Telegram. Send errors are logged to `~/.cache/mnrh/notify/errors.log`.
 
+Permission requests can also be answered from Telegram. `claudemeister notify telegram approve on` turns it on
+(off by default) and adds a blocking `PermissionRequest` hook to `~/.claude/settings.json` (`claudemeister setup`
+installs it too, with a 600-second timeout). When Claude asks for permission and you're away from the Mac, the bot
+sends the project, session title, tool and command or path with "Разрешить" and "Отклонить" buttons, and Claude
+gets your answer. If you come back to the Mac, nobody answers within 9.5 minutes, or Telegram can't be reached,
+the hook exits without a decision and Claude asks in the terminal as usual; the message then says so and loses its
+buttons. While you're at the Mac, the hook exits at once and changes nothing. Questions (`AskUserQuestion`) and
+plan approval stay on the Mac. Only presses from the chat that pressed Start during setup count, and each
+message's buttons carry a random id that is valid for that one request. When the request is already in Telegram
+with buttons, the regular "permission needed" message isn't sent there a second time.
+`claudemeister notify telegram approve off` turns it off.
+
+The trade-off: anyone who can open your Telegram (an unlocked phone, a logged-in Telegram Desktop or web session)
+can allow a command on your Mac, and so can anyone holding the bot token, which sits in the Keychain. The message
+shows at most 600 characters of the command and hides values that look like passwords and tokens, so a long or
+masked command can't be fully read from the phone; the message says so, and then it's safer to deny or wait. An
+"allow" from Telegram doesn't bypass your `deny` rules in Claude Code settings. A request that guard held because
+it touches keys comes with guard's warning, but the button allows it just like the terminal prompt would. Turn it
+on only if your Telegram account has a password and two-step verification.
+
 Or to Tossling on your phone through your own ntfy: `claudemeister notify phone away` when you're away from the
 Mac, `phone always` every time, `phone off` to turn it off, `phone test` for a test. They go to the `claude`
 channel, and questions and permission requests use high priority. On the phone, add the `claude` channel in
 Tossling's notification settings.
+
+With Remote Control, Claude Code pushes to the Claude app on your phone itself. If the session is connected
+(`/remote-control`, `--remote-control` or "Enable Remote Control for all sessions") and **Push when actions
+required** is on in `/config` (`inputNeededNotifEnabled`), claudemeister doesn't send permission requests and
+questions to Telegram or Tossling for that session, so they don't arrive twice; the Mac notification stays.
+claudemeister sees the connection through `CLAUDE_CODE_BRIDGE_SESSION_ID`, which Claude Code v2.1.199 and later
+sets in hook commands while Remote Control is connected. "Done" and "waiting for you" still go out as before:
+Claude sends its own push for those only when it decides to. If `/config` shows "No mobile registered",
+open the Claude app on the phone, or turn the toggle off to get these through claudemeister again.
 
 The claudemeister Notify icon is `share/claudemeister/icon.png`, 1024×1024 (a rounded copy for the README is in
 `docs/icon.png`). It fills the whole square with no transparency: macOS 26 rounds it itself and puts an icon with

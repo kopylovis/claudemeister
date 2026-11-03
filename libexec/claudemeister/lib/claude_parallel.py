@@ -13,6 +13,7 @@ from mnrhlib import CLAUDE_HOME, find_project, projects_dir, tilde
 TRANSLIT = dict(zip("абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
                     ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s",
                      "t", "u", "f", "h", "ts", "ch", "sh", "sch", "", "y", "", "e", "yu", "ya"]))
+# Без своего .worktreeinclude в проекте копируем неотслеживаемые файлы по этому списку, как раньше
 COPY = ["local.properties", ".env", ".env.*", "fastlane/.env", "fastlane/.env.*"]
 
 
@@ -37,23 +38,47 @@ def worktree_root(root):
     return os.path.join(projects_dir(), ".worktrees", os.path.basename(root.rstrip("/")))
 
 
+def worktree_include(root):
+    """Файлы по .worktreeinclude, как их берёт Claude Code для своих worktree: шаблоны в синтаксисе .gitignore,
+    и только то, что git игнорирует, так что отслеживаемое не дублируется. None, если файла нет."""
+    inc = os.path.join(root, ".worktreeinclude")
+    if not os.path.isfile(inc):
+        return None
+    r = subprocess.run(["git", "-C", root, "ls-files", "-z", "--others", "--ignored", f"--exclude-from={inc}"],
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode or not r.stdout:
+        return []
+    r = subprocess.run(["git", "-C", root, "check-ignore", "-z", "--stdin"], input=r.stdout,
+                       capture_output=True, text=True, timeout=120)
+    return sorted(f for f in r.stdout.split("\0") if f)
+
+
 def copy_local(root, path):
+    """-> (скопированные пути, взяты ли они по .worktreeinclude)"""
+    files = worktree_include(root)
+    native = files is not None
+    if not native:
+        files = []
+        for pattern in COPY:
+            for src in glob.glob(os.path.join(glob.escape(root), pattern)):
+                rel = os.path.relpath(src, root)
+                if not git(root, "ls-files", rel):
+                    files.append(rel)
     copied = []
-    for pattern in COPY:
-        for src in glob.glob(os.path.join(glob.escape(root), pattern)):
-            rel = os.path.relpath(src, root)
-            dst = os.path.join(path, rel)
-            if os.path.isfile(src) and not os.path.exists(dst) and not git(root, "ls-files", rel):
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                shutil.copy2(src, dst)
-                copied.append(rel)
-    return copied
+    for rel in files:
+        src, dst = os.path.join(root, rel), os.path.join(path, rel)
+        if os.path.isfile(src) and not os.path.lexists(dst):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+            copied.append(rel)
+    return copied, native
 
 
 PERMISSION_MODES = ["default", "acceptEdits", "auto", "plan"]
 
 
-def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None, permission=None, rc=True):
+def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None, permission=None, rc=True,
+          fork=False):
     root, err = find_project(project, cwd)
     if err:
         return err, True
@@ -62,6 +87,13 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
     task = " ".join((task or "").split())
     if not task:
         return "Нужна задача: что сделать параллельно", True
+    sid = None
+    if fork:
+        import claude_proc
+        sid = claude_proc.current_sid()
+        if not sid:
+            return ("Форк возможен только изнутри сессии Claude Code (/parallel или MCP): "
+                    "не нашёл, какая сессия сейчас идёт."), True
     base = git(root, "branch", "--show-current") or git(root, "rev-parse", "--short", "HEAD")
     name = branch or f"parallel/{slug(task)}"
     if git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{name}"):
@@ -74,19 +106,33 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
         return f"Не создал worktree: {e}", True
     git(root, "config", f"branch.{name}.mnrhBase", base)
     git(root, "config", f"branch.{name}.mnrhTask", task)
-    copied = copy_local(root, path)
+    copied, native = copy_local(root, path)
     dirty = git(root, "status", "--porcelain")
-    prompt = (f"Это параллельная задача в отдельном git worktree {path}, ветка {name}, ответвлена от {base} "
-              f"проекта {root}. Задача: {task}\n\nРаботай только в этой папке. Если нужны зависимости "
-              f"(node_modules и т. п.), поставь их здесь. Когда закончишь, закоммить результат в ветку {name} "
-              f"(не сливай и не пушь) и коротко отчитайся, что сделано и как проверить.")
+    rules = (f"Работай только в этой папке. Если нужны зависимости (node_modules и т. п.), поставь их здесь. "
+             f"Когда закончишь, закоммить результат в ветку {name} (не сливай и не пушь) и коротко отчитайся, "
+             f"что сделано и как проверить.")
+    if sid:
+        prompt = (f"Это форк разговора выше для параллельной задачи. Теперь ты в отдельном git worktree {path}, "
+                  f"ветка {name}, ответвлена от {base} проекта {root}. Всё, что было выше, — контекст; файлы в "
+                  f"{root} больше не трогай. Задача: {task}\n\n{rules}")
+    else:
+        prompt = (f"Это параллельная задача в отдельном git worktree {path}, ветка {name}, ответвлена от {base} "
+                  f"проекта {root}. Задача: {task}\n\n{rules}")
     import claude_open
     flags = ["--permission-mode", permission] if permission in PERMISSION_MODES and permission != "default" else []
+    if sid:
+        # --resume по id ищет сессию и в git worktree проекта, а форк начинается в папке запуска
+        flags = ["--resume", sid, "--fork-session"] + flags
     text, bad = claude_open.open_claude({"path": path, "mode": mode, "prompt": prompt, "flags": flags,
                                          "trust": claude_open.trusted(root), "remote_control": rc}, cm or "claudemeister")
     lines = [f"Ветка {name} от {base}, worktree {tilde(path)}."]
-    if copied:
-        lines.append("Скопировал неотслеживаемые настройки: " + ", ".join(copied) + ".")
+    if sid:
+        lines.append(f"Второй Claude продолжает эту переписку: форк сессии {sid[:8]}, эта остаётся как была.")
+    if copied and native:
+        lines.append("Скопировал по .worktreeinclude: " + ", ".join(copied) + ".")
+    elif copied:
+        lines.append("Скопировал неотслеживаемые настройки: " + ", ".join(copied) + " (своего .worktreeinclude "
+                     "у проекта нет, поэтому по списку claudemeister).")
     if dirty:
         lines.append("В основной папке есть незакоммиченные изменения — в worktree их нет, он от последнего коммита.")
     lines.append(text)
@@ -340,7 +386,11 @@ START_TOOL = {
                             "description": "режим разрешений второго Claude; по умолчанию обычный (спрашивает, "
                                            "вопрос приходит уведомлением). auto или acceptEdits — только если "
                                            "пользователь так сказал"},
-        "remote_control": {"type": "boolean", "description": "Remote Control, по умолчанию да"}},
+        "remote_control": {"type": "boolean", "description": "Remote Control, по умолчанию да"},
+        "fork": {"type": "boolean",
+                 "description": "открыть второй Claude с этой же перепиской (форк сессии), чтобы он знал весь "
+                                "контекст; эта сессия не меняется. По умолчанию нет: новая сессия только с задачей. "
+                                "Ставь, если пользователь просит взять контекст с собой"}},
         "required": ["task"]},
 }
 LIST_TOOL = {
@@ -367,7 +417,7 @@ TOOLS = [START_TOOL, LIST_TOOL, FINISH_TOOL]
 def handle(name, a, cwd=None, cm=None):
     if name == "parallel_task":
         return start(a.get("task"), a.get("project"), a.get("branch"), a.get("mode") or "caffeinate", cwd, cm,
-                     a.get("permission_mode"), a.get("remote_control", True) is not False)
+                     a.get("permission_mode"), a.get("remote_control", True) is not False, bool(a.get("fork")))
     if name == "parallel_list":
         return listing(a.get("project"), cwd)
     if a.get("action") == "pr":
@@ -380,8 +430,9 @@ def handle(name, a, cwd=None, cm=None):
 def main():
     args = sys.argv[2:] if sys.argv[1:2] == ["parallel"] else sys.argv[1:]
     if not args or args[0] in ("-h", "--help"):
-        print('claudemeister parallel "<задача>" [-p проект] [-b ветка] [-n] [--permission-mode auto] [--no-rc]')
-        print("                         новая ветка и worktree от текущего коммита, в новом окне — Claude с задачей")
+        print('claudemeister parallel "<задача>" [-p проект] [-b ветка] [-n] [--permission-mode auto] [--no-rc] [--fork]')
+        print("                         новая ветка и worktree от текущего коммита, в новом окне — Claude с задачей;")
+        print("                         --fork изнутри Claude: второй Claude продолжает эту переписку (форк сессии)")
         print("claudemeister parallel list           параллельные задачи этого проекта")
         print("claudemeister parallel merge <ветка>  влить в исходную ветку (без пуша) и убрать worktree")
         print("claudemeister parallel drop <ветка>   выбросить ветку и worktree")
@@ -398,7 +449,7 @@ def main():
             opts[args[i]] = args[i + 1]
             i += 2
             continue
-        if args[i] in ("-n", "--no-rc", "--no-merge"):
+        if args[i] in ("-n", "--no-rc", "--no-merge", "--fork"):
             opts[args[i]] = True
         else:
             rest.append(args[i])
@@ -412,7 +463,8 @@ def main():
     else:
         from mnrhlib import CM
         text, bad = start(" ".join(rest), opts.get("-p"), opts.get("-b"), "normal" if opts.get("-n") else "caffeinate",
-                          cm=CM, permission=opts.get("--permission-mode"), rc=not opts.get("--no-rc"))
+                          cm=CM, permission=opts.get("--permission-mode"), rc=not opts.get("--no-rc"),
+                          fork=bool(opts.get("--fork")))
     print(text)
     return 1 if bad else 0
 

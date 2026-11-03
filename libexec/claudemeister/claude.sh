@@ -28,6 +28,7 @@ claudemeister ... --new             новая сессия, не предлаг
 claudemeister ... -i                без записи на диск: переписки и истории промптов не останется
 claudemeister ... -- <аргументы>    аргументы для claude, например: claudemeister kcalm -- --continue
 claudemeister sessions              сохранённые сессии: размер, продолжить, перенести, удалить (sessions -h)
+claudemeister usage                 токены и активное время по проектам и моделям (--days N, --project P)
 claudemeister restart               изнутри Claude: закрыть и открыть эту же сессию заново, с claude update
 claudemeister forget                изнутри Claude: удалить эту сессию без следа и открыть чистую
 claudemeister fresh                 изнутри Claude: новая сессия без названия, эта остаётся в /resume (/fresh)
@@ -44,6 +45,9 @@ claudemeister guard                 спросит перед чтением и�
 claudemeister buildlog              длинный вывод Gradle, xcodebuild, тестов: Claude видит выжимку (on, off, test)
 claudemeister humanize              писать без признаков нейросети: on, off, check <файл>, rules (/humanize)
 claudemeister notify                уведомления, когда Claude ждёт тебя (on, off, after <сек>, test, telegram)
+claudemeister ps                    открытые сессии Claude Code: кто ждет тебя, перейти во вкладку
+claudemeister restore               открыть заново сессии, открытые до перезагрузки или падения
+claudemeister doctor                проверить установку: команды, хуки, MCP, уведомления, promptsill, прокси
 claudemeister setup                 поставить /restart, хуки, MCP-сервер, хук zsh, прокси и promptsill
                                     (--country KZ для прокси, --remove убрать; подробнее: setup -h)
 claudemeister --version             версия
@@ -59,7 +63,11 @@ case "${1:-}" in
   open) shift ;;
   proxy) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_proxy.py" "$@" ;;
   sessions) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_sessions.py" "$@" ;;
+  usage) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_usage.py" "$@" ;;
   brief) exec /usr/bin/python3 "$(dirname "$MENU")/claude_brief.py" "$@" ;;
+  ps) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_live.py" ps "$@" ;;
+  restore) exec /usr/bin/python3 "$(dirname "$MENU")/claude_live.py" "$@" ;;
+  doctor) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_doctor.py" "$@" ;;
   parallel) exec /usr/bin/python3 "$(dirname "$MENU")/claude_parallel.py" "$@" ;;
   ask) exec /usr/bin/python3 "$(dirname "$MENU")/claude_ask.py" "$@" ;;
   release-notes) exec /usr/bin/python3 "$(dirname "$MENU")/release_notes.py" "$@" ;;
@@ -67,6 +75,7 @@ case "${1:-}" in
   humanize|humanize-hook) exec /usr/bin/python3 "$(dirname "$MENU")/claude_humanize.py" "$@" ;;
   buildlog|buildlog-hook) exec /usr/bin/python3 "$(dirname "$MENU")/claude_buildlog.py" "$@" ;;
   guard|guard-hook) exec /usr/bin/python3 "$(dirname "$MENU")/claude_guard.py" "$@" ;;
+  approve-hook) grep -qsx "telegram_approve=on" "$CONF" || exit 0; exec /usr/bin/python3 "$(dirname "$MENU")/telegram_approve.py" "$@" ;;
   notify|notify-hook|focus) exec /usr/bin/python3 "$(dirname "$MENU")/claude_notify.py" "$@" ;;
   restart|forget|fresh|slim|mcp|setup|notice|session-end) exec /usr/bin/python3 "$(dirname "$MENU")/claude_restart.py" "$@" ;;
 esac

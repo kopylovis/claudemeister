@@ -8,9 +8,12 @@ import shlex
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CLAUDE_HOME, HOOKS, STATUS_CMD, hook_command, is_hook  # noqa: E402
+from mnrhlib import CLAUDE_HOME, HOOK_TIMEOUTS, HOOKS, STATUS_CMD, hook_command, is_hook  # noqa: E402
 
 PATH = os.path.join(CLAUDE_HOME, "settings.json")
+# Ключи, которые старые версии Claude Code держали в ~/.claude.json; новые его еще читают
+LEGACY = os.path.join(os.path.expanduser("~"), ".claude.json")
+MANAGED = "/Library/Application Support/ClaudeCode/managed-settings.json"
 
 
 def load(path=PATH):
@@ -23,6 +26,23 @@ def load(path=PATH):
     if not isinstance(data, dict):
         raise ValueError("ожидался JSON-объект")
     return data
+
+
+def setting(key, cwd=None, user=PATH, legacy=LEGACY, managed=MANAGED):
+    """Значение ключа настроек Claude Code с учетом старшинства файлов: managed, settings.local.json и
+    settings.json проекта, пользовательский, потом ~/.claude.json от старых версий. None, если нигде нет."""
+    files = [managed]
+    if cwd:
+        files += [os.path.join(cwd, ".claude", "settings.local.json"), os.path.join(cwd, ".claude", "settings.json")]
+    files += [user, legacy]
+    for path in files:
+        try:
+            data = load(path)
+        except (OSError, ValueError):
+            continue
+        if key in data:
+            return data[key]
+    return None
 
 
 def save_atomic(data, path=PATH):
@@ -69,7 +89,7 @@ def missing(settings, wanted=HOOKS, exact=False):
 
 
 def entry(cmd, run_async, matcher):
-    hook = {"type": "command", "command": hook_command(cmd), "timeout": 10}
+    hook = {"type": "command", "command": hook_command(cmd), "timeout": HOOK_TIMEOUTS.get(cmd, 10)}
     if run_async:
         hook["async"] = True
     return dict({"matcher": matcher} if matcher else {}, hooks=[hook])
