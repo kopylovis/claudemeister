@@ -18,6 +18,7 @@ claudemeister root           in the home folder
 claudemeister ... -x         through your own VPS, this session only
 claudemeister ... -i         nothing written to disk: no transcript, no prompt history
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
+claudemeister usage          tokens and active time per project and model over the last N days
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
 claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
@@ -68,7 +69,7 @@ and `brew uninstall claudemeister` removes the program.
 
 The projects folder is `~/Developer` by default. Set another one with a `projects=<path>` line in
 `~/.config/mnrh/config` or with `MNRH_PROJECTS=<path>`. setup puts the read-only MCP tools (`session_search`,
-`session_read`, `deps_outdated` and others) into `permissions.allow` in `~/.claude/settings.json`, so Claude
+`session_read`, `usage_report`, `deps_outdated` and others) into `permissions.allow` in `~/.claude/settings.json`, so Claude
 doesn't ask before using them.
 
 ### From source, for development
@@ -247,6 +248,23 @@ all sessions takes a few seconds (4 s for 700 MB of transcripts). After that onl
 takes under 0.1 s. The index is refreshed in the background when each session starts (the
 `SessionStart` hook). When a session is deleted, including through `/forget` and `sessions rm`, its index goes
 with it.
+
+## Usage: `claudemeister usage`
+
+`claudemeister usage [--days N] [--project P] [--top N]` shows how much Claude Code was used over the last N days
+(7 by default, today included; `--days 0` means all time): per project, the number of sessions, active time,
+model requests and tokens by kind (input without cache, output, cache read, cache write); per model, the same
+without time; and the heaviest sessions by total tokens, with their titles. Tokens come from the `usage` field
+of the model's answers in the transcripts, counted once per answer even when the answer spans several lines,
+subagents included. Active time is the sum of gaps under 5 minutes between transcript events, with the
+subagents' time merged in, so a long break or a night with an open session doesn't count. There are no dollar
+amounts: on a subscription tokens and time are what matter. Claude gets the same report through the
+`usage_report` MCP tool ("how many tokens did kcalm take this week?").
+
+Per-day totals are cached in `~/.cache/mnrh/usage/<id>.json` (260 KB for 700 MB of transcripts) and, like the
+search index, only new lines are read. The first run over all sessions takes about 3 s, later ones 0.05 s, and
+the cache is also refreshed in the background when a session starts. A rewritten session (`slim`) is counted
+again from scratch, and a deleted one loses its cache.
 
 ## Outdated dependencies: `claudemeister deps`
 

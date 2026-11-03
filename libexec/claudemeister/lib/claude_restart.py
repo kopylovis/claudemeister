@@ -272,6 +272,8 @@ def drop_junk(path, why):
 def warm_up(pdir, keep):
     sweep(pdir, keep)
     claude_search.refresh()
+    import claude_usage
+    claude_usage.refresh()
 
 
 def sweep(pdir, keep):

@@ -28,6 +28,7 @@ claudemeister ... --new             новая сессия, не предлаг
 claudemeister ... -i                без записи на диск: переписки и истории промптов не останется
 claudemeister ... -- <аргументы>    аргументы для claude, например: claudemeister kcalm -- --continue
 claudemeister sessions              сохранённые сессии: размер, продолжить, перенести, удалить (sessions -h)
+claudemeister usage                 токены и активное время по проектам и моделям (--days N, --project P)
 claudemeister restart               изнутри Claude: закрыть и открыть эту же сессию заново, с claude update
 claudemeister forget                изнутри Claude: удалить эту сессию без следа и открыть чистую
 claudemeister fresh                 изнутри Claude: новая сессия без названия, эта остаётся в /resume (/fresh)
@@ -59,6 +60,7 @@ case "${1:-}" in
   open) shift ;;
   proxy) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_proxy.py" "$@" ;;
   sessions) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_sessions.py" "$@" ;;
+  usage) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_usage.py" "$@" ;;
   brief) exec /usr/bin/python3 "$(dirname "$MENU")/claude_brief.py" "$@" ;;
   doctor) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_doctor.py" "$@" ;;
   parallel) exec /usr/bin/python3 "$(dirname "$MENU")/claude_parallel.py" "$@" ;;
