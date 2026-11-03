@@ -149,11 +149,8 @@ def trust(path):
     with open(CLAUDE_JSON) as f:
         data = json.load(f)
     data.setdefault("projects", {}).setdefault(os.path.abspath(path), {})["hasTrustDialogAccepted"] = True
-    tmp = CLAUDE_JSON + ".mnrh"
-    with open(tmp, "w") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    os.chmod(tmp, os.stat(CLAUDE_JSON).st_mode & 0o777)
-    os.replace(tmp, CLAUDE_JSON)
+    import claude_settings
+    claude_settings.save_atomic(data, CLAUDE_JSON)
 
 
 def terminal():

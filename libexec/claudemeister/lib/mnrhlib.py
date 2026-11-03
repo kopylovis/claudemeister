@@ -17,6 +17,25 @@ CM = shutil.which("claudemeister") or os.path.join(ROOT, "bin", "claudemeister")
 MNRH = shutil.which("mnrh")
 
 
+def write_json(path, data, mode=None, newline=False, **dump):
+    """Записать JSON атомарно: во временный файл рядом и os.replace. mode: права нового файла (с учетом umask),
+    newline: перевод строки в конце; остальное уходит в json.dump."""
+    tmp = f"{path}.{os.getpid()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o666 if mode is None else mode)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, **dump)
+            if newline:
+                f.write("\n")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def hook_command(sub):
     return f"{shlex.quote(CM)} {sub}"
 
@@ -146,10 +165,7 @@ def badge(name, data=None, refresh=False):
             os.remove(path)
         elif refresh or not os.path.exists(path):
             os.makedirs(BADGES, exist_ok=True)
-            tmp = f"{path}.{os.getpid()}"
-            with open(tmp, "w") as f:
-                json.dump(data, f, ensure_ascii=False)
-            os.replace(tmp, path)
+            write_json(path, data, ensure_ascii=False)
     except OSError:
         pass
 

@@ -9,7 +9,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import DEV, HOME, confirm, has_flag, paint, projects, tilde
+from mnrhlib import DEV, HOME, confirm, has_flag, paint, projects, tilde, write_json
 from menu import pick
 import claude_search
 
@@ -705,10 +705,7 @@ def slim_notice(sid, **fields):
     except (OSError, ValueError):
         return
     data.update(fields, at=time.time())
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f, ensure_ascii=False)
-    os.replace(tmp, path)
+    write_json(path, data, ensure_ascii=False)
 
 
 def slim_in_tab(sid):

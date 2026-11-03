@@ -10,7 +10,7 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, read_config, settings_name, settings_path, tilde, write_config
+from mnrhlib import HOME, read_config, settings_name, settings_path, tilde, write_config, write_json
 from swiftagent import SwiftAgent
 import ntfy_alert
 import telegram
@@ -194,10 +194,7 @@ def load_state(sid):
 
 def save_state(sid, st):
     os.makedirs(STATE, exist_ok=True)
-    tmp = f"{state_path(sid)}.{os.getpid()}.tmp"
-    with open(tmp, "w") as f:
-        json.dump(st, f)
-    os.replace(tmp, state_path(sid))
+    write_json(state_path(sid), st)
 
 
 def prune_states():
