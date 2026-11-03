@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -54,6 +55,33 @@ class Offline(unittest.TestCase):
             print(s.offline(None, "-Users-x-gone"))
         """)
         self.assertEqual(r.stdout.split(), ["True", "True", "False", "False"], r.stderr)
+
+
+class Statusline(unittest.TestCase):
+    def run_case(self, settings):
+        code = """
+            import json, os, claude_setup as c
+            c.promptsill_path = lambda: "/opt/homebrew/bin/promptsill"
+            os.makedirs(c.CLAUDE, exist_ok=True)
+            path = os.path.join(c.CLAUDE, "settings.json")
+            if SETTINGS is not None:
+                json.dump(SETTINGS, open(path, "w"))
+            c.promptsill_statusline()
+            print(json.dumps(json.load(open(path)).get("statusLine")))
+        """.replace("SETTINGS", repr(settings))
+        r, _ = in_sandbox(code)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout.splitlines()[-1])
+
+    def test_empty_settings_get_promptsill(self):
+        self.assertEqual(self.run_case(None)["command"], "/opt/homebrew/bin/promptsill")
+        self.assertEqual(self.run_case({"theme": "dark"})["command"], "/opt/homebrew/bin/promptsill")
+
+    def test_stub_is_replaced_and_foreign_line_kept(self):
+        stub = {"type": "command", "command": "/usr/local/bin/claudemeister statusline"}
+        self.assertEqual(self.run_case({"statusLine": stub})["command"], "/opt/homebrew/bin/promptsill")
+        mine = {"type": "command", "command": "~/bin/my-line.sh"}
+        self.assertEqual(self.run_case({"statusLine": mine}), mine)
 
 
 if __name__ == "__main__":
