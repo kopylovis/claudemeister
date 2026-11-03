@@ -7,6 +7,8 @@ import subprocess
 import sys
 
 HOME = os.path.expanduser("~")
+# Папка Claude Code; MNRH_CLAUDE_HOME подменяет ее в тестах
+CLAUDE_HOME = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 # Команда claudemeister для хуков, MCP и перезапуска. Сначала из PATH: путь /opt/homebrew/bin/claudemeister
 # переживает brew upgrade, а путь в Cellar нет.

@@ -10,7 +10,7 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, is_hook, read_config, settings_name, settings_path, tilde, write_config
+from mnrhlib import HOME, read_config, settings_name, settings_path, tilde, write_config
 from swiftagent import SwiftAgent
 import ntfy_alert
 import telegram
@@ -337,13 +337,13 @@ def status():
     print(f"Уведомления: {'включены' if on else 'выключены'}; о готовом ответе — если ход дольше {after()} с; "
           f"звук {'есть' if sound() else 'выключен'}")
     print(f"Приложение: {tilde(AGENT.app)}" + ("" if os.path.exists(AGENT.bin) else " (соберётся при первом уведомлении)"))
+    import claude_settings
+    rows = claude_settings.rows("notify-hook")
     try:
-        with open(os.path.join(HOME, ".claude", "settings.json")) as f:
-            hooks = json.load(f).get("hooks", {})
-        have = [e for e in ("UserPromptSubmit", "Stop", "Notification")
-                if any(is_hook(h.get("command", ""), "notify-hook") for x in hooks.get(e, []) for h in x.get("hooks", []))]
-    except (OSError, ValueError, AttributeError):
-        have = []
+        lost = claude_settings.missing(claude_settings.load(), rows)
+    except (OSError, ValueError):
+        lost = rows
+    have = [r[0] for r in rows if r not in lost]
     print("Хуки Claude Code: " + (", ".join(have) if have else "не стоят — claudemeister setup"))
     print(telegram.describe())
     mode = ntfy_alert.phone_mode()
