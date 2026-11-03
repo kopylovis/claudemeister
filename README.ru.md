@@ -17,6 +17,7 @@ claudemeister ... -x         через свой VPS, только эта сес
 claudemeister ... -i         без записи на диск: ни переписки, ни истории промптов
 claudemeister sessions       сохранённые сессии: продолжить, перенести, удалить, clean, search, slim
 claudemeister setup          команды /restart, /forget и другие, хуки, MCP-сервер, хук zsh, прокси, promptsill
+claudemeister doctor         проверить установку: команды, хуки, MCP-сервер, уведомления, promptsill, прокси
 claudemeister restart        изнутри Claude: закрыть, claude update, открыть эту же сессию снова
 claudemeister forget         изнутри Claude: удалить эту сессию без следа и открыть чистую
 claudemeister fresh          изнутри Claude: новая сессия без названия, эта остаётся в /resume
@@ -53,6 +54,10 @@ Claude Code удаляет переписки старше `cleanupPeriodDays`, 
 Какие шаги сделаны, setup записывает в `~/.config/mnrh/claude-setup.json`. Если `claudemeister` запустить
 до setup или после обновления, в котором в setup появился новый шаг, он перечислит ненастроенное и предложит
 настроить. "Не предлагать" больше не спрашивает про эти шаги, `claudemeister setup` все равно настроит их.
+
+`claudemeister doctor` проверяет все это разом: Claude Code в PATH, команды и совпадают ли они с этой версией,
+хуки, срок хранения переписок, строку состояния, ответ MCP-сервера на `tools/list`, хук zsh, приложение
+уведомлений и прокси. Если что-то сломано, выходит с кодом 1 и пишет, что это исправит.
 
 Обновление: `brew upgrade claudemeister`. Открытые сессии подхватят новую версию сами: перед каждым
 запросом MCP-сервер проверяет, не сменился ли его код (`brew upgrade` или `git pull` в папке проекта), и если
