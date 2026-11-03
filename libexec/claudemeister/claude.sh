@@ -42,6 +42,7 @@ claudemeister shot                  снимок окна приложения (
 claudemeister deps                  устаревшие зависимости Gradle в gradle/libs.versions.toml
 claudemeister proxy                 прокси через VPS для отдельных сессий: setup, test, remove (proxy -h)
 claudemeister guard                 спросит перед чтением или удалением ключей и необратимыми командами
+claudemeister buildlog              длинный вывод Gradle, xcodebuild, тестов: Claude видит выжимку (on, off, test)
 claudemeister humanize              писать без признаков нейросети: on, off, check <файл>, rules (/humanize)
 claudemeister notify                уведомления, когда Claude ждёт тебя (on, off, after <сек>, test, telegram)
 claudemeister ps                    открытые сессии Claude Code: кто ждет тебя, перейти во вкладку
@@ -72,6 +73,7 @@ case "${1:-}" in
   release-notes) exec /usr/bin/python3 "$(dirname "$MENU")/release_notes.py" "$@" ;;
   statusline) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_status.py" "$@" ;;
   humanize|humanize-hook) exec /usr/bin/python3 "$(dirname "$MENU")/claude_humanize.py" "$@" ;;
+  buildlog|buildlog-hook) exec /usr/bin/python3 "$(dirname "$MENU")/claude_buildlog.py" "$@" ;;
   guard|guard-hook) exec /usr/bin/python3 "$(dirname "$MENU")/claude_guard.py" "$@" ;;
   approve-hook) grep -qsx "telegram_approve=on" "$CONF" || exit 0; exec /usr/bin/python3 "$(dirname "$MENU")/telegram_approve.py" "$@" ;;
   notify|notify-hook|focus) exec /usr/bin/python3 "$(dirname "$MENU")/claude_notify.py" "$@" ;;

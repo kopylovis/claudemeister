@@ -21,7 +21,8 @@ STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".c
 CLAUDE = CLAUDE_HOME
 STEPS = [
     ("commands", "команды /restart, /forget, /fresh, /slim, /todo и другие"),
-    ("hooks", "хуки Claude Code: сообщения после /restart, guard, уведомления, humanization, строка состояния; "
+    ("hooks", "хуки Claude Code: сообщения после /restart, guard, уведомления, humanization, выжимка сборок, "
+              "строка состояния; "
               "хранить переписки год, а не 30 дней"),
     ("zsh", "хук перезапуска в ~/.zshrc"),
     ("mcp", "MCP-сервер claudemeister"),

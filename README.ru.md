@@ -34,6 +34,7 @@ claudemeister shot [прил.]   снимок окна приложения; б�
 claudemeister deps           устаревшие зависимости Gradle в libs.versions.toml
 claudemeister proxy          прокси через свой сервер для выбранных сессий: setup, test, remove
 claudemeister guard          вопрос перед чтением и удалением ключей и необратимыми командами; on, off, test, log
+claudemeister buildlog       выжимка длинного вывода сборок и тестов для Claude: on, off, test <файл>
 claudemeister humanize       правила письма без признаков нейросети: on, off, check <файл>, rules
 claudemeister notify         уведомления, когда Claude ждёт тебя: on, off, after <сек>, test, telegram
 ```
@@ -521,6 +522,25 @@ master ↑3 ±5 · vite :5173 · memory 9.9/16 GB · swap 1.5 · Gradle 2 (3.1 G
 сообщению после вопроса, модель не может ответить за тебя. `claudemeister guard skip
 destructive` выключает правило, `guard test '<команда>'` показывает решение, `guard log` —
 последние срабатывания.
+
+### Длинный вывод сборок: `claudemeister buildlog`
+
+Gradle или xcodebuild легко выводят тысячи строк, и все они попадают в контекст Claude. Хук
+`PostToolUse` для Bash смотрит на команды с `./gradlew` или `gradle`, `xcodebuild`, `swift build` или
+`swift test`, `npm`/`pnpm`/`yarn` `test` или `build`, `pytest` и `make`. Если вывод длиннее 200 строк
+или 20 КБ, Claude видит выжимку: ошибки с парой строк вокруг, упавшие задачи и тесты, предупреждения
+(каждое разное — одной строкой, с числом повторов), блоки вроде «What went wrong» у Gradle и «The
+following build commands failed» у xcodebuild, итоговые строки (`BUILD SUCCESSFUL`, `** TEST FAILED **`,
+`Executed 120 tests`) и последние строки. В первой строке выжимки — путь к полному логу в
+`~/.cache/mnrh/logs/<сессия>/<время>.log`: если выжимки мало, Claude ищет в нём сам. Логи хранятся
+7 дней, `/forget` удаляет их вместе с сессией.
+
+Вывод подменяется через `updatedToolOutput`, а его Claude Code принимает только от `PostToolUse`, и это
+событие приходит, только если команда завершилась с кодом 0. Когда падает сама сборка, Claude Code шлёт
+`PostToolUseFailure`, а там вывод не заменить, и Claude видит его как раньше (дальше 30 000 символов
+Claude Code режет сам). Команды вроде `./gradlew test --continue; echo "exit $?"` или `xcodebuild … | tee`
+завершаются с кодом 0, и их вывод сжимается, даже если сборка упала. `claudemeister buildlog off` выключает
+хук, `on` включает, `buildlog test <файл>` показывает, что увидит Claude для сохранённого лога.
 
 ### Уведомления, когда Claude ждёт тебя
 
