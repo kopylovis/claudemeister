@@ -1,8 +1,8 @@
-<img src="docs/icon.png" width="128" alt="claudemeister icon" align="right">
+<p align="center"><img src="docs/icon.png" width="128" alt="claudemeister icon"></p>
 
-# claudemeister
+<h1 align="center">claudemeister</h1>
 
-English · [Русский](README.ru.md)
+<p align="center">English · <a href="README.ru.md">Русский</a></p>
 
 A toolkit around [Claude Code](https://code.claude.com) on macOS. It starts Claude in a project and lets you
 pick a saved session, restarts or slims the current session from inside Claude, sends single sessions through
