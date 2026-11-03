@@ -7,7 +7,7 @@ import unittest
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 "libexec", "claudemeister", "lib"))
-import claude_restart as r  # noqa: E402
+import claude_proc as r  # noqa: E402
 
 
 class ResumeFlags(unittest.TestCase):
@@ -53,6 +53,21 @@ class Argv(unittest.TestCase):
 
     def test_missing_process(self):
         self.assertIsNone(r.proc_argv(99999999))
+
+
+class LightImports(unittest.TestCase):
+    """Хуки notify-hook и humanize-hook берут отсюда find_claude и тексты команд и не должны тянуть MCP-сервер."""
+    HEAVY = {"mcp_server", "claude_restart", "gradle_deps", "claude_search", "claude_open", "claude_parallel",
+             "window_shot", "http.client", "urllib.request"}
+
+    def loaded(self, modules):
+        code = (f"import sys; sys.path.insert(0, {os.path.dirname(r.__file__)!r}); import {modules}; "
+                "print(' '.join(sys.modules))")
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
+        return set(out.split())
+
+    def test_proc_and_slash_are_light(self):
+        self.assertEqual(self.loaded("claude_proc, slash") & self.HEAVY, set())
 
 
 if __name__ == "__main__":
