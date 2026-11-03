@@ -11,6 +11,7 @@ from claude_restart import restart, slim_current  # noqa: E402
 import claude_mac  # noqa: E402
 import claude_open  # noqa: E402
 import claude_search  # noqa: E402
+import claude_usage  # noqa: E402
 import gradle_deps  # noqa: E402
 import claude_ask  # noqa: E402
 import claude_parallel  # noqa: E402
@@ -110,6 +111,7 @@ HANDLERS = {
     "open_claude": lambda a: claude_open.open_claude(a, CM),
     "session_search": lambda a: claude_search.handle("session_search", a, current_sid()),
     "session_read": lambda a: claude_search.handle("session_read", a),
+    "usage_report": claude_usage.handle,
     # без полного mnrh этих инструментов нет и в tools/list
     **({"mac_status": lambda a: claude_mac.handle("mac_status", a, MNRH),
         "free_memory": lambda a: claude_mac.handle("free_memory", a, MNRH)} if MNRH else {}),
@@ -126,7 +128,7 @@ HANDLERS = {
     "ask_project": lambda a: claude_ask.ask(a.get("project"), a.get("question"), a.get("model")),
 }
 # mac_status и free_memory запускают команды mnrh, поэтому они есть, только когда стоит полный mnrh
-EXTRA_TOOLS = (claude_search.TOOLS + (claude_mac.TOOLS if MNRH else []) + [gradle_deps.TOOL] + mnrh_todo.TOOLS + release_notes.TOOLS
+EXTRA_TOOLS = (claude_search.TOOLS + [claude_usage.TOOL] + (claude_mac.TOOLS if MNRH else []) + [gradle_deps.TOOL] + mnrh_todo.TOOLS + release_notes.TOOLS
                + claude_parallel.TOOLS + [window_shot.TOOL, claude_ask.TOOL])
 READ_ONLY = [t["name"] for t in EXTRA_TOOLS if (t.get("annotations") or {}).get("readOnlyHint")] + \
     ["todo_add", "todo_done"]

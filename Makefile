@@ -74,6 +74,9 @@ test:
 	@echo '{"session_id":"00000000-0000-0000-0000-000000000000","hook_event_name":"UserPromptSubmit","user_input":"x"}' | ./bin/claudemeister notify-hook | wc -c | grep -q '^ *0$$'
 	@./bin/claudemeister -h >/dev/null
 	@./bin/claudemeister sessions -h >/dev/null
+	@./bin/claudemeister usage -h | grep -q -- '--days'
+	@./bin/claudemeister usage --days x 2>/dev/null; test $$? -eq 2
+	@printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/claudemeister mcp | grep -q '"usage_report"'
 	@./bin/claudemeister sessions -l >/dev/null
 	@./bin/claudemeister sessions search mnrh-no-such-word-zq >/dev/null
 	@./bin/claudemeister sessions choose /nonexistent-cm | grep -qx new

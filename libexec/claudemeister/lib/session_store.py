@@ -331,6 +331,8 @@ def delete(s):
         forget_history(s["id"])
         forget_caches(s["id"])
     claude_search.drop(s["id"])
+    import claude_usage
+    claude_usage.drop(s["id"])
     remove_if_empty(s["pdir"])
 
 
