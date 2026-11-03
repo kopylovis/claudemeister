@@ -10,7 +10,7 @@ import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CM, HOME, MNRH, settings_path, tilde  # noqa: E402
+from mnrhlib import CM, HOME, MNRH, settings_path, tilde, write_json  # noqa: E402
 from claude_proc import (CLAUDE_BIN, SHELLS, RestartError, argv_of, caffeinate_args, claude_version,  # noqa: E402
                          drop_name, find_claude, launcher, ps, resume_flags, session_file, session_path)
 import claude_search  # noqa: E402
@@ -195,10 +195,7 @@ def write_notice(p, status):
     kind = "forget" if p["forget"] else "slim" if p.get("slim") else "fresh" if p.get("fresh") else "restart"
     data = {"kind": kind, "status": status, "title": p["title"],
             "old_sid": p["sid"], "version": p["version"], "at": time.time()}
-    tmp = os.path.join(NOTICES, p["new_sid"] + ".tmp")
-    with open(tmp, "w") as f:
-        json.dump(data, f, ensure_ascii=False)
-    os.replace(tmp, os.path.join(NOTICES, p["new_sid"] + ".json"))
+    write_json(os.path.join(NOTICES, p["new_sid"] + ".json"), data, ensure_ascii=False)
 
 
 def notice_text(n):

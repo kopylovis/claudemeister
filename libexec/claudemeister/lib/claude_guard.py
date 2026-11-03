@@ -9,7 +9,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import BADGES, HOME, badge, read_config, tilde, write_config
+from mnrhlib import BADGES, HOME, badge, read_config, tilde, write_config, write_json
 
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-guard.log")
 TAIL = 4 << 20
@@ -261,10 +261,7 @@ def save_pending(sid, data):
     os.makedirs(GUARD_STATE, exist_ok=True)
     data = {k: v for k, v in data.items() if time.time() - v < 3600}
     path = pending_path(sid)
-    tmp = f"{path}.{os.getpid()}"
-    with open(tmp, "w") as f:
-        json.dump(data, f)
-    os.replace(tmp, path)
+    write_json(path, data)
 
 
 def last_user(path):

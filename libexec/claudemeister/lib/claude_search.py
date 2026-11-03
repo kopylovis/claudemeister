@@ -5,7 +5,7 @@ import re
 import shlex
 from datetime import datetime
 
-from mnrhlib import HOME, tilde
+from mnrhlib import HOME, tilde, write_json
 
 CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
 PROJECTS = os.path.join(CLAUDE, "projects")
@@ -91,11 +91,7 @@ def load_index(sid):
 
 def save_index(sid, data):
     os.makedirs(INDEX, mode=0o700, exist_ok=True)
-    tmp = f"{index_path(sid)}.{os.getpid()}.tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-    os.replace(tmp, index_path(sid))
+    write_json(index_path(sid), data, mode=0o600, ensure_ascii=False, separators=(",", ":"))
 
 
 def update(sid, path):

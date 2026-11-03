@@ -13,7 +13,8 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CLAUDE_HOME, HOME, LEGACY_CALL, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
+from mnrhlib import (CLAUDE_HOME, HOME, LEGACY_CALL, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde,  # noqa: E402
+                     write_json)
 import claude_settings  # noqa: E402
 
 STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "mnrh", "claude-setup.json")
@@ -62,11 +63,7 @@ def write(done, skipped, legacy_declined=None):
     if legacy_declined:
         data["legacy_declined"] = True
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
-    tmp = STATE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    os.replace(tmp, STATE)
+    write_json(STATE, data, newline=True, ensure_ascii=False, indent=2)
 
 
 def current():
