@@ -1,3 +1,5 @@
+<img src="docs/icon.png" width="128" alt="claudemeister icon" align="right">
+
 # claudemeister
 
 Обвязка для [Claude Code](https://code.claude.com) на macOS: запуск в проекте с выбором сессии,
@@ -493,7 +495,7 @@ Telegram. Ошибки отправки пишутся в `~/.cache/mnrh/notify/
 `phone always` — всегда, `phone off` — выключить, `phone test` — пробное. Уходят в канал `claude`,
 вопросы и просьбы о разрешении — с высоким приоритетом. На телефоне: Tossling → Уведомления → + → `claude`.
 
-Иконка claudemeister Notify — `share/claudemeister/icon.png`, 1024×1024,
+Иконка claudemeister Notify — `share/claudemeister/icon.png`, 1024×1024 (скругленная копия для README лежит в `docs/icon.png`),
 картинка до края без прозрачности: macOS 26 сама скругляет её, а иконку с полями или
 прозрачными углами кладёт на серую подложку. Из PNG при сборке делается `AppIcon.icns`;
 при смене иконки помощник пересобирается сам. Центр уведомлений помнит старую иконку до
