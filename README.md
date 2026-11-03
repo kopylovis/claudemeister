@@ -6,7 +6,7 @@
 
 A toolkit around [Claude Code](https://code.claude.com) on macOS. It starts Claude in a project and lets you
 pick a saved session, restarts or slims the current session from inside Claude, sends single sessions through
-your own proxy server, guards secrets, notifies you when Claude is waiting, and adds an MCP server for searching
+your own proxy server, guards secrets and asks before destructive commands, notifies you when Claude is waiting, and adds an MCP server for searching
 past sessions, a project backlog, parallel tasks, window screenshots and release notes.
 
 The interface and messages are in Russian.
@@ -16,6 +16,7 @@ claudemeister                menu: pick a project, sessions, proxy, humanization
 claudemeister kcalm          straight into a project (a prefix of its name is enough)
 claudemeister root           in the home folder
 claudemeister ... -x         through your own VPS, this session only
+claudemeister ... -i         nothing written to disk: no transcript, no prompt history
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
@@ -30,7 +31,7 @@ claudemeister todo           project backlog that survives between sessions (add
 claudemeister shot [app]     screenshot of an app window; without arguments, a list of windows
 claudemeister deps           outdated Gradle dependencies in libs.versions.toml
 claudemeister proxy          proxy through your own server for chosen sessions: setup, test, remove
-claudemeister guard          ask before reading or deleting keys; on, off, test, log
+claudemeister guard          ask before reading or deleting keys and before destructive commands; on, off, test, log
 claudemeister humanize       writing rules without the usual AI tells: on, off, check <file>, rules
 claudemeister notify         notifications when Claude is waiting for you: on, off, after <sec>, test, telegram
 ```
@@ -47,6 +48,9 @@ and the other commands into `~/.claude/commands`, hooks into `~/.claude/settings
 `~/.zshrc`, and registers the `claudemeister` MCP server. If the VPS proxy isn't set up yet, setup asks whether
 to do it now (`--country KZ` sets the expected exit country). If the
 [promptsill](https://github.com/kopylovis/promptsill) status line is missing, it offers to install it with Homebrew.
+
+Claude Code deletes transcripts older than `cleanupPeriodDays`, 30 days by default, and with them goes everything
+`session_search` and `/resume` could find. setup sets it to 365 unless you already have your own value.
 
 setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If you run `claudemeister` before
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
@@ -303,10 +307,21 @@ worktree.
 claudemeister parallel list            branches, commits, whether Claude is working there
 claudemeister parallel merge <branch>  merge into the original branch (no push), remove the worktree
 claudemeister parallel drop <branch>   throw it away
+claudemeister parallel pr <branch>     push, open a PR, wait for CI, merge it, remove the worktree
 ```
 
 A merge won't start while Claude is open there, while there are uncommitted changes, or while the main folder is
 on a different branch than the original one. On a conflict it's aborted.
+
+`parallel pr` takes the change through GitHub instead. It refuses while Claude is open in the worktree or the
+worktree has uncommitted changes. It pushes the branch (never tags), opens a PR into the original branch with
+`gh pr create --fill`, or reuses the open one, and picks the merge method from that branch's history: `--merge`
+if it already has merge commits, `--rebase` otherwise. If the PR has checks, it waits for them with
+`gh pr checks --watch`; with no checks it merges right away. After `gh pr merge --delete-branch` it removes the
+worktree and the local branch, like `drop`, and fast-forwards the original branch in the main folder when that
+branch is checked out there and clean. If CI fails, the PR stays open, the worktree stays, and the failing checks
+are listed: fix them in the worktree, commit, and run `parallel pr` again. `--no-merge` only pushes and opens the
+PR. In Claude Code the same is `parallel_finish` with `action: "pr"`.
 
 ## Window screenshot: `claudemeister shot`
 
@@ -335,12 +350,20 @@ registers the `claudemeister` MCP server with the tools `restart`, `forget`, `fr
 - `/forget` (or "forget this session", the `forget` tool) makes a throwaway session: Claude quits, the
   conversation is deleted from disk together with its lines in `history.jsonl`, `file-history` and
   `session-env`, the screen and terminal scrollback are cleared, and a clean Claude opens in the same folder.
-  Unlike the built-in `/clear`, nothing stays behind in `/resume`. Claude Code has no such option of its own:
-  `--no-session-persistence` only works with `--print`.
+  Unlike the built-in `/clear`, nothing stays behind in `/resume`. To keep a session off the disk from the
+  start, launch it with `claudemeister -i`: it sets `CLAUDE_CODE_SKIP_PROMPT_HISTORY=1`, so Claude Code writes
+  neither the transcript nor the prompt history. Such a session can't be reopened, so `/restart` and `/slim`
+  refuse in it.
 - `/fresh` (or "start a new session", the `fresh` tool) does the same as `/forget` but leaves the old session
-  alone, so it stays in `/resume`. The built-in `/clear` carries the old title over to the new session, and
-  `/resume` then shows two sessions with the same name. `/fresh` starts a new process with a new `--session-id`
-  and no `--name`, so the new session starts untitled.
+  alone, so it stays in `/resume`. The built-in `/clear` now does almost the same (it no longer carries the AI
+  title over, and `/clear <name>` labels the session you leave). `/fresh` also starts a new Claude Code process,
+  so settings, MCP servers, CLAUDE.md and an installed update are loaded again, with caffeinate, the proxy and
+  your flags kept.
+
+Claude Code has its own `/restart` since 2.1.288. It applies an installed update and resumes the session, on a
+native install with a Pro or Max plan. claudemeister's `/restart` takes the name: it also runs `claude update`,
+keeps caffeinate, the proxy and your launch flags, and works in Terminal, iTerm2 and other terminals through the
+zsh hook. The built-in one stays available as `/update`.
 - "open Claude in kcalm" uses the `open_claude` tool. Without a project it returns the list of projects (branch,
   last commit) and modes to the chat, Claude asks which one, and opens a new window of the same terminal (Terminal
   or iTerm2) with `claudemeister <project> -k|-n`. You can pass a first prompt and `--continue`. Remote Control
@@ -402,23 +425,27 @@ and busy ports, the Node version, memory, Gradle daemons and simulators. Labels 
 with a Russian locale or `promptsill install --lang ru`. See the promptsill README for details.
 `claudemeister statusline …` passes commands on to promptsill.
 
-### Guarding secrets: `claudemeister guard`
+### Guarding secrets and destructive commands: `claudemeister guard`
 
-The `PreToolUse` hook watches exactly two things:
+The `PreToolUse` hook watches three things:
 
 | Rule | What |
 |---|---|
 | `secrets-read` | reading or editing `.env*` (except `.example` and similar), `*.p8`, `*.p12`, `*.jks`, `*.keystore`, private SSH keys, `*service-account*.json`, `*credentials*.json`, `keystore.properties`, `.netrc`, `.npmrc`; `security find-*-password -w` |
 | `secrets-delete` | `rm`, `rmdir`, `unlink`, `shred`, `trash` on a key file or a folder that holds keys (`~/.ssh`, `~/.gnupg`, `~/.aws`, the keychain, `fastlane/` with `.p8` and JSON…); `security delete-*` |
+| `destructive` | `git reset --hard`; `git push --force`, `-f`, `--force-with-lease` or a `+branch` refspec to any remote; `git clean -f` with `-d` or `-x`; `git checkout -- .`, `git checkout -f`, `git restore .` (not `--staged` alone); `git branch -D`; `rm -r` of a path outside the project, of the project root itself or of `~` (temp folders, `~/.cache`, `~/Library/Caches` and DerivedData are fine); `curl`/`wget … \| sh`, `bash`, `zsh` or `python` reading the script from stdin, and `bash -c "$(curl …)"`; `dd of=/dev/disk…`; `diskutil erase*`; `mkfs`; `chmod`/`chown -R` of `/`, `~` or system folders |
 
-Everything else (`git push --force`, `reset --hard`, `rm` on ordinary files, fastlane uploads, SQL, commands on
-a server) is left to Claude Code's normal permissions.
+The project is the git root above Claude's working folder (or the folder itself outside git). A session started
+in `~` has no project, so any `rm -r` outside temp folders asks. Commands are found inside `bash -c`, `sh -c`,
+`zsh -c` and `eval` too, and behind `sudo`, `env`, `xargs`, `nohup`, `time`. `git push origin main`, `rm -rf build`
+inside the project and `curl … | python3 -m json.tool` go through. Everything else (`rm` on ordinary files in the
+project, fastlane uploads, SQL, commands on a server) is left to Claude Code's normal permissions.
 
 It asks rather than refuses. In the default mode Claude Code shows its own "allow?" prompt with an explanation.
 In `auto` mode and with `--dangerously-skip-permissions` Claude Code can't do that (its "ask" turns into "deny"
 or "allow"), so guard holds the call and Claude asks you in the chat why it needs it. Answer "yes" (or "ok",
 "да", "давай") and the same call goes through. The answer is tied to that call and to your message after the
-question, so the model can't answer for you. `claudemeister guard skip secrets-read` turns a rule off,
+question, so the model can't answer for you. `claudemeister guard skip destructive` turns a rule off,
 `guard test '<command>'` shows the decision, and `guard log` shows recent hits.
 
 ### Notifications when Claude is waiting for you
