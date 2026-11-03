@@ -257,6 +257,22 @@ def message_for(payload, st):
     return None
 
 
+# Запросы, о которых Remote Control сам присылает push в приложение Claude, если в /config включено
+# «Push when actions required» (inputNeededNotifEnabled): запрос разрешения и вопрос, ждущий ответа.
+NATIVE_PUSH = {"permission_prompt", "elicitation_dialog", "elicitation_url_dialog"}
+
+
+def native_push(payload):
+    """Claude Code сам пришлет push на телефон об этом событии: сессия сейчас подключена к Remote Control
+    (CLAUDE_CODE_BRIDGE_SESSION_ID есть в окружении хука) и включен push о запросах. Тогда наш push лишний."""
+    if not os.environ.get("CLAUDE_CODE_BRIDGE_SESSION_ID"):
+        return False
+    if payload.get("hook_event_name") != "Notification" or payload.get("notification_type") not in NATIVE_PUSH:
+        return False
+    import claude_settings
+    return claude_settings.setting("inputNeededNotifEnabled", payload.get("cwd")) is True
+
+
 def approval_pending(payload, sid):
     """Запрос разрешения уже ушел в Telegram с кнопками (approve-hook): второе сообщение о нем там не нужно."""
     if payload.get("notification_type") != "permission_prompt":
@@ -297,9 +313,11 @@ def hook():
     if not tty:
         return 0
     bundle = os.environ.get("__CFBundleIdentifier", "")
-    to_phone = telegram.wanted() and not approval_pending(payload, sid)
+    native = native_push(payload)
+    to_phone = not native and telegram.wanted() and not approval_pending(payload, sid)
     phone_mode = ntfy_alert.phone_mode()
-    to_tossling = ntfy_alert.configured() and (phone_mode == "always" or (phone_mode == "away" and telegram.away()))
+    to_tossling = not native and ntfy_alert.configured() and (
+        phone_mode == "always" or (phone_mode == "away" and telegram.away()))
     on_mac = not watching(bundle, tty)
     if not on_mac and not to_phone and not to_tossling:
         return 0
@@ -355,6 +373,9 @@ def status():
     if telegram.configured():
         import telegram_approve
         print(telegram_approve.describe())
+    if claude_settings.setting("inputNeededNotifEnabled", os.getcwd()) is True:
+        print("Remote Control: в сессии с /remote-control о запросах разрешения и вопросах на телефон пишет сам "
+              "Claude (Push when actions required), в Telegram и Tossling они не дублируются")
     mode = ntfy_alert.phone_mode()
     print("Tossling: " + {"off": "выключено — claudemeister notify phone away",
                        "away": f"когда ты не за Mac, канал «{ntfy_alert.CLAUDE_TOPIC}»",

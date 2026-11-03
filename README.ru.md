@@ -18,6 +18,8 @@ claudemeister ... -i         без записи на диск: ни переп�
 claudemeister sessions       сохранённые сессии: продолжить, перенести, удалить, clean, search, slim
 claudemeister usage          токены и активное время по проектам и моделям за последние N дней
 claudemeister setup          команды /restart, /forget и другие, хуки, MCP-сервер, хук zsh, прокси, promptsill
+claudemeister ps             открытые сессии Claude Code: кто ждет тебя; выбрать и перейти во вкладку
+claudemeister restore        открыть заново сессии, открытые до перезагрузки Mac или падения Claude
 claudemeister doctor         проверить установку: команды, хуки, MCP-сервер, уведомления, promptsill, прокси
 claudemeister restart        изнутри Claude: закрыть, claude update, открыть эту же сессию снова
 claudemeister forget         изнутри Claude: удалить эту сессию без следа и открыть чистую
@@ -55,6 +57,12 @@ Claude Code удаляет переписки старше `cleanupPeriodDays`, 
 Какие шаги сделаны, setup записывает в `~/.config/mnrh/claude-setup.json`. Если `claudemeister` запустить
 до setup или после обновления, в котором в setup появился новый шаг, он перечислит ненастроенное и предложит
 настроить. "Не предлагать" больше не спрашивает про эти шаги, `claudemeister setup` все равно настроит их.
+
+Каждый старт сессии записывается в `~/.cache/mnrh/open/`: папка, вкладка терминала, caffeinate, прокси
+и флаги запуска, а обычный выход запись убирает. `claudemeister ps` показывает открытые сессии с состоянием
+(ждет тебя, работает, свободна) и переходит во вкладку выбранной в Terminal или iTerm2. После перезагрузки,
+обновления macOS или падения `claudemeister restore` открывает сессии, чьи записи остались, каждую в своем
+окне с `--resume`, тем же режимом, прокси и флагами. Сессии, запущенные с `-i`, не записываются.
 
 `claudemeister doctor` проверяет все это разом: Claude Code в PATH, команды и совпадают ли они с этой версией,
 хуки, срок хранения переписок, строку состояния, ответ MCP-сервера на `tools/list`, хук zsh, приложение
@@ -295,7 +303,7 @@ Maven Central и Gradle Plugin Portal и показывает, что обнов
 | `/where` | где остановились: git, прошлая сессия в проекте, бэклог, что дальше |
 | `/todo` | бэклог: `/todo` — список, `/todo <текст>` — добавить, `/todo done 2` — сделано |
 | `/release-notes` | «Что нового» на русском и английском для fastlane |
-| `/parallel <задача>` | та же задача в отдельной ветке во втором окне; `/parallel list` |
+| `/parallel <задача>` | та же задача в отдельной ветке во втором окне; `--fork` — с этой перепиской; `/parallel list` |
 | `/shot <приложение> [вопрос]` | снимок окна, Claude смотрит на него и отвечает |
 | `/ask <проект> <вопрос>` | ответ из другого проекта от отдельного Claude |
 
@@ -347,6 +355,13 @@ git worktree от текущего коммита в `~/Developer/.worktrees/<п
 дублируются. Тот же файл работает и для `claude --worktree`, и для worktree субагентов. Если
 `.worktreeinclude` в проекте нет, копируется прежний список: неотслеживаемые
 `local.properties`, `.env*`, `fastlane/.env*`, и ответ об этом говорит.
+
+`/parallel --fork <задача>` (`fork: true` в `parallel_task`, `--fork` в командной строке
+изнутри Claude) открывает второй Claude с копией текущей переписки, чтобы он знал всё, что
+было сказано: в worktree запускается `claude --resume <id> --fork-session`. Claude Code ищет
+сессию по id и в git worktree проекта, а форк начинается в папке запуска, поэтому копия
+работает в worktree, а исходная сессия остаётся как была. Без `--fork` второй Claude
+начинает новую сессию только с задачей.
 
 Worktree claudemeister по-прежнему делает сам, а не через `claude --worktree`: этот флаг
 кладёт worktree в `<репозиторий>/.claude/worktrees/` на ветку `worktree-<имя>` от ветки по
@@ -564,6 +579,16 @@ Mac. Нажатия принимаются только из чата, где п
 Или в Tossling на телефоне, через свой ntfy: `claudemeister notify phone away` — когда тебя нет за Mac,
 `phone always` — всегда, `phone off` — выключить, `phone test` — пробное. Уходят в канал `claude`,
 вопросы и просьбы о разрешении — с высоким приоритетом. На телефоне: Tossling → Уведомления → + → `claude`.
+
+С Remote Control Claude Code сам присылает push в приложение Claude на телефоне. Если сессия
+подключена (`/remote-control`, `--remote-control` или «Enable Remote Control for all sessions») и в
+`/config` включено **Push when actions required** (`inputNeededNotifEnabled`), claudemeister не шлёт
+запросы разрешения и вопросы этой сессии в Telegram и Tossling, чтобы они не приходили дважды;
+уведомление на Mac остаётся. Подключение claudemeister видит по `CLAUDE_CODE_BRIDGE_SESSION_ID`:
+Claude Code v2.1.199 и новее задаёт его в командах хуков, пока Remote Control подключён. «Готово» и
+«ждёт тебя» уходят как раньше: о них Claude присылает push, только если сам решит. Если в `/config`
+написано «No mobile registered», открой приложение Claude на телефоне или выключи переключатель,
+и эти уведомления снова пойдут через claudemeister.
 
 Иконка claudemeister Notify — `share/claudemeister/icon.png`, 1024×1024 (скругленная копия для README лежит в `docs/icon.png`),
 картинка до края без прозрачности: macOS 26 сама скругляет её, а иконку с полями или

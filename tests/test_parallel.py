@@ -232,7 +232,7 @@ class ParallelPr(unittest.TestCase):
 
 
 class Start(unittest.TestCase):
-    """start без окна: open_claude подменён."""
+    """start без окна: open_claude и поиск текущей сессии подменены."""
 
     def setUp(self):
         self.tmp = os.path.realpath(tempfile.mkdtemp())
@@ -252,14 +252,18 @@ class Start(unittest.TestCase):
         sh(self.root, "add", ".")
         sh(self.root, "commit", "-q", "-m", "init")
         import claude_open
-        self.saved = claude_open.open_claude, claude_open.trusted
+        import claude_proc
+        self.saved = claude_open.open_claude, claude_open.trusted, claude_proc.current_sid
         self.opened = []
         claude_open.open_claude = lambda args, cm: (self.opened.append(args) or ("Открыл окно.", False))
         claude_open.trusted = lambda path: True
+        claude_proc.current_sid = lambda: self.sid
+        self.sid = None
 
     def tearDown(self):
         import claude_open
-        claude_open.open_claude, claude_open.trusted = self.saved
+        import claude_proc
+        claude_open.open_claude, claude_open.trusted, claude_proc.current_sid = self.saved
         os.environ.clear()
         os.environ.update(self.env)
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -306,6 +310,23 @@ class Start(unittest.TestCase):
         self.assertEqual(args["flags"], ["--permission-mode", "auto"])
         self.assertEqual(args["path"], self.worktree())
         self.assertIn("Задача: починить вход", args["prompt"])
+
+    def test_fork_resumes_this_session_in_the_worktree(self):
+        self.sid = "11111111-2222-3333-4444-555555555555"
+        text, bad = p.handle("parallel_task", {"task": "починить вход", "project": self.root, "fork": True})
+        self.assertFalse(bad, text)
+        args = self.opened[0]
+        self.assertEqual(args["flags"][:3], ["--resume", self.sid, "--fork-session"])
+        self.assertEqual(args["path"], self.worktree())
+        self.assertIn("форк", args["prompt"])
+        self.assertIn(self.worktree(), args["prompt"])
+        self.assertIn("форк сессии 11111111", text)
+
+    def test_fork_outside_claude_creates_nothing(self):
+        text, bad = p.start("починить вход", self.root, fork=True)
+        self.assertTrue(bad)
+        self.assertEqual(self.opened, [])
+        self.assertEqual(p.entries(self.root), [])
 
 
 class GithubRepo(unittest.TestCase):

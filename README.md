@@ -20,6 +20,8 @@ claudemeister ... -i         nothing written to disk: no transcript, no prompt h
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
 claudemeister usage          tokens and active time per project and model over the last N days
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
+claudemeister ps             open Claude Code sessions: which wait for you; pick one to jump to its tab
+claudemeister restore        reopen the sessions that were open when the Mac rebooted or Claude crashed
 claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
 claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
@@ -57,6 +59,12 @@ Claude Code deletes transcripts older than `cleanupPeriodDays`, 30 days by defau
 setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If you run `claudemeister` before
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
+
+Every session start records the session in `~/.cache/mnrh/open/` with its folder, terminal tab, caffeinate,
+proxy and launch flags, and a normal exit removes the record. `claudemeister ps` lists the open sessions with
+their state (waiting for you, working, idle) and jumps to the chosen one's tab in Terminal or iTerm2. After a
+reboot, a macOS update or a crash, `claudemeister restore` reopens the sessions whose records are left, each in
+its own window with `--resume`, the same mode, proxy and flags. Sessions started with `-i` aren't recorded.
 
 `claudemeister doctor` checks all of it in one go: Claude Code on PATH, the commands and whether they match this
 version, the hooks, transcript retention, the status line, the MCP server answering `tools/list`, the zsh hook,
@@ -289,7 +297,7 @@ cached for 6 hours. Claude gets the same through the `deps_outdated` tool.
 | `/where` | where we left off: git, the last session in this project, backlog, what's next |
 | `/todo` | backlog: `/todo` lists, `/todo <text>` adds, `/todo done 2` marks done |
 | `/release-notes` | "What's new" in Russian and English for fastlane |
-| `/parallel <task>` | the same task in its own branch in a second window; `/parallel list` |
+| `/parallel <task>` | the same task in its own branch in a second window; `--fork` takes this conversation along; `/parallel list` |
 | `/shot <app> [question]` | screenshot of a window that Claude looks at and answers about |
 | `/ask <project> <question>` | an answer from another project by a separate Claude |
 
@@ -337,6 +345,13 @@ project has that file in its root, its patterns (`.gitignore` syntax) pick the f
 are copied, so tracked files are never duplicated. The same file then also works for `claude --worktree` and for
 subagent worktrees. A project without `.worktreeinclude` gets the old list: untracked `local.properties`, `.env*`
 and `fastlane/.env*`, and the reply says so.
+
+`/parallel --fork <task>` (`fork: true` in `parallel_task`, `--fork` on the command line from inside Claude) opens
+the second Claude with a copy of the current conversation, so it knows everything said so far:
+`claude --resume <id> --fork-session` started in the worktree. Claude Code finds a session by id in the
+project's git worktrees, and a fork starts in the folder it was launched from, so the copy works in the worktree
+while the original session stays as it was. Without `--fork` the second Claude starts a new session with only
+the task.
 
 claudemeister keeps creating the worktree itself instead of using `claude --worktree`: that flag puts worktrees
 in `<repo>/.claude/worktrees/` on a `worktree-<name>` branch from the default branch of the remote, while
@@ -541,6 +556,15 @@ Or to Tossling on your phone through your own ntfy: `claudemeister notify phone 
 Mac, `phone always` every time, `phone off` to turn it off, `phone test` for a test. They go to the `claude`
 channel, and questions and permission requests use high priority. On the phone, add the `claude` channel in
 Tossling's notification settings.
+
+With Remote Control, Claude Code pushes to the Claude app on your phone itself. If the session is connected
+(`/remote-control`, `--remote-control` or "Enable Remote Control for all sessions") and **Push when actions
+required** is on in `/config` (`inputNeededNotifEnabled`), claudemeister doesn't send permission requests and
+questions to Telegram or Tossling for that session, so they don't arrive twice; the Mac notification stays.
+claudemeister sees the connection through `CLAUDE_CODE_BRIDGE_SESSION_ID`, which Claude Code v2.1.199 and later
+sets in hook commands while Remote Control is connected. "Done" and "waiting for you" still go out as before:
+Claude sends its own push for those only when it decides to. If `/config` shows "No mobile registered",
+open the Claude app on the phone, or turn the toggle off to get these through claudemeister again.
 
 The claudemeister Notify icon is `share/claudemeister/icon.png`, 1024×1024 (a rounded copy for the README is in
 `docs/icon.png`). It fills the whole square with no transparency: macOS 26 rounds it itself and puts an icon with

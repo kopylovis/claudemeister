@@ -35,6 +35,7 @@ test:
 	@./bin/claudemeister setup --country KAZ 2>/dev/null; test $$? -eq 2
 	@./bin/claudemeister setup -h | grep -q -- '--country'
 	@./bin/claudemeister doctor -h | grep -q 'проверить установку'
+	@./bin/claudemeister ps -h | grep -q restore
 	@HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent-cm /usr/bin/python3 libexec/claudemeister/lib/claude_setup.py pending | grep -q '^fresh commands .*proxy promptsill$$'
 	@HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent-cm /usr/bin/python3 libexec/claudemeister/lib/claude_setup.py check </dev/null | wc -c | grep -q '^ *0$$'
 	@./bin/claudemeister guard >/dev/null
