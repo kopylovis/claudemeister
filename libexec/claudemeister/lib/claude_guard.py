@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mnrhlib import BADGES, HOME, badge, read_config, tilde, write_config
 
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-guard.log")
-INSIDE_ONLY = [os.path.join(HOME, ".cache")]
 TAIL = 4 << 20
 
 RULES = {
@@ -221,7 +220,7 @@ def check_bash(cmd, cwd):
     return None
 
 
-def check(tool, inp, cwd, scratch=None):
+def check(tool, inp, cwd):
     cwd = os.path.normpath(cwd or os.getcwd())
     if tool == "Bash":
         return check_bash(str(inp.get("command") or ""), cwd)
@@ -301,7 +300,7 @@ def last_user(path):
 def decide(payload):
     tool = payload.get("tool_name") or ""
     inp = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
-    found = check(tool, inp, payload.get("cwd"), payload.get("scratchpad_dir"))
+    found = check(tool, inp, payload.get("cwd"))
     if not found or found[0] in skipped():
         return None
     rule, why = found

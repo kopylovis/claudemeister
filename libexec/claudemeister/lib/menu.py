@@ -220,10 +220,6 @@ class Menu:
             self.draw()
 
 
-def pick_many(items, title="", marked=(), summary=None):
-    return pick(items, title=title, marked=set(marked), summary=summary)
-
-
 def pick(items, title="", label="", start=1, default=0, marked=None, summary=None, esc=None):
     if not items or all(key is None for key, _ in items):
         return None
