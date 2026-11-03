@@ -288,12 +288,23 @@ the text from `notes:` or `RELEASE_NOTES`, so the answer ends with a ready comma
 ## Parallel tasks
 
 `/parallel <task>` (or "do this in parallel") creates a `parallel/<from the task>` branch and a git worktree from
-the current commit in `~/Developer/.worktrees/<project>/`, copies the untracked `local.properties`, `.env*` and
-`fastlane/.env*` into it, and opens a second Claude with the task and Remote Control in a new Terminal or iTerm2
-window. It works only in its own folder and commits to its own branch without merging or pushing. The
-permission mode is the usual one: questions arrive as notifications, and clicking one opens its tab.
-`--permission-mode auto` skips the questions. Uncommitted changes in the main folder don't make it into the
-worktree.
+the current commit in `~/Developer/.worktrees/<project>/`, copies local untracked files into it (see below), and
+opens a second Claude with the task and Remote Control in a new Terminal or iTerm2 window. It works only in its own
+folder and commits to its own branch without merging or pushing. The permission mode is the usual one: questions
+arrive as notifications, and clicking one opens its tab. `--permission-mode auto` skips the questions.
+Uncommitted changes in the main folder don't make it into the worktree.
+
+Which files are copied follows Claude Code's own
+[`.worktreeinclude`](https://code.claude.com/docs/en/worktrees#copy-gitignored-files-into-worktrees): if the
+project has that file in its root, its patterns (`.gitignore` syntax) pick the files, and only files git ignores
+are copied, so tracked files are never duplicated. The same file then also works for `claude --worktree` and for
+subagent worktrees. A project without `.worktreeinclude` gets the old list: untracked `local.properties`, `.env*`
+and `fastlane/.env*`, and the reply says so.
+
+claudemeister keeps creating the worktree itself instead of using `claude --worktree`: that flag puts worktrees
+in `<repo>/.claude/worktrees/` on a `worktree-<name>` branch from the default branch of the remote, while
+`/parallel` branches from the current commit, records the base branch for `merge` and `pr`, and opens its own
+window with caffeinate and Remote Control. `--tmux` needs `--worktree`, so it isn't used either.
 
 ```
 claudemeister parallel list            branches, commits, whether Claude is working there
