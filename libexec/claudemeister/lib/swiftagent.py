@@ -15,7 +15,7 @@ import sys
 import tempfile
 import time
 
-from mnrhlib import HOME, WARN, settings_path
+from mnrhlib import CACHE, HOME, WARN, settings_path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -32,7 +32,7 @@ class SwiftAgent:
         self.bin = os.path.join(self.app, "Contents", "MacOS", f"claudemeister-{name}")
         self.stamp = os.path.join(self.app, "Contents", "Resources", "source.sha256")
         self.plist = os.path.join(HOME, "Library", "LaunchAgents", f"{label}.plist")
-        self.state_file = os.path.join(HOME, ".cache", "mnrh", f"{name}.json")
+        self.state_file = os.path.join(CACHE, f"{name}.json")
         self.log = os.path.join(HOME, "Library", "Logs", f"mnrh-{name}.log")
         self.domain = f"gui/{os.getuid()}"
         self.agents_dir = os.path.join(self.app, "Contents", "Library", "LaunchAgents")

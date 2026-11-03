@@ -9,6 +9,13 @@ import sys
 HOME = os.path.expanduser("~")
 # Папка Claude Code; MNRH_CLAUDE_HOME подменяет ее в тестах
 CLAUDE_HOME = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
+# Кеш claudemeister. Путь от mnrh, его же читает share/claudemeister/restart.zsh
+CACHE = os.path.join(HOME, ".cache", "mnrh")
+# Задания перезапуска для хука zsh (по имени tty) и сообщения после /restart, /forget, /slim (по id новой сессии)
+RESTART_QUEUE = os.path.join(CACHE, "restart")
+NOTICES = os.path.join(CACHE, "notice")
+# id сессии Claude Code
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 # Команда claudemeister для хуков, MCP и перезапуска. Сначала из PATH: путь /opt/homebrew/bin/claudemeister
 # переживает brew upgrade, а путь в Cellar нет.

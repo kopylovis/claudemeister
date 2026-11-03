@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import os
-import re
 import shlex
 import signal
 import subprocess
@@ -10,17 +9,15 @@ import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CM, HOME, MNRH, settings_path, tilde, write_json  # noqa: E402
+from mnrhlib import CM, HOME, MNRH, NOTICES, RESTART_QUEUE, UUID_RE, settings_path, tilde, write_json  # noqa: E402
 from claude_proc import (CLAUDE_BIN, SHELLS, RestartError, argv_of, caffeinate_args, claude_version,  # noqa: E402
                          drop_name, find_claude, launcher, ps, resume_flags, session_file, session_path)
 import claude_search  # noqa: E402
 
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-claude-restart.log")
 SLIM_MIN = 5 << 20
-QUEUE = os.path.join(HOME, ".cache", "mnrh", "restart")
-NOTICES = os.path.join(HOME, ".cache", "mnrh", "notice")
+QUEUE = RESTART_QUEUE
 NOTICE_TTL = 300
-UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 FIND_TAB = {
     "Apple_Terminal": '''

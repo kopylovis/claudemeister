@@ -10,7 +10,7 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, read_config, settings_name, settings_path, tilde, write_config, write_json
+from mnrhlib import CACHE, HOME, UUID_RE, read_config, settings_name, settings_path, tilde, write_config, write_json
 from swiftagent import SwiftAgent
 import ntfy_alert
 import telegram
@@ -18,7 +18,7 @@ import telegram
 AGENT = SwiftAgent("notify", "claudemeister Notify", "com.claudemeister.notify")
 # Так приложение называлось, пока было частью mnrh. После сборки нового его удаляем.
 OLD_APP = os.path.join(HOME, "Library", "Application Support", "mnrh", "mnrh Notify.app")
-STATE = os.path.join(HOME, ".cache", "mnrh", "notify")
+STATE = os.path.join(CACHE, "notify")
 DEFAULT_AFTER = 20
 TERMINALS = {"com.apple.Terminal": "Terminal", "com.googlecode.iterm2": "iTerm2"}
 
@@ -267,7 +267,7 @@ def hook():
     if not isinstance(payload, dict):
         return 0
     sid = payload.get("session_id") or ""
-    if not re.match(r"^[0-9a-f-]{36}$", sid) or not enabled():
+    if not UUID_RE.match(sid) or not enabled():
         return 0
     st = load_state(sid)
     event = payload.get("hook_event_name")

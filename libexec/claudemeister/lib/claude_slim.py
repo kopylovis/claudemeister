@@ -7,9 +7,9 @@ import shutil
 import time
 import uuid
 
-from mnrhlib import HOME, tilde
+from mnrhlib import CACHE, tilde
 
-BACKUPS = os.path.join(HOME, ".cache", "mnrh", "slim-backup")
+BACKUPS = os.path.join(CACHE, "slim-backup")
 BACKUP_DAYS = 14
 TEXT_LIMIT = 8000
 HEAD, TAIL = 3000, 1500

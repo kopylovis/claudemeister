@@ -12,7 +12,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from menu import choice, pick  # noqa: E402
-from mnrhlib import CM, HOME  # noqa: E402
+from mnrhlib import CM, RESTART_QUEUE  # noqa: E402
 
 ACTIONS = [
     ("open", "выбрать проект"),
@@ -39,7 +39,7 @@ def pick_action(at=0):
 def restart_pending():
     """/restart уже положил задание для этой вкладки: меню больше не показываем, вкладку займет Claude."""
     try:
-        job = os.path.join(HOME, ".cache", "mnrh", "restart", os.path.basename(os.ttyname(0)))
+        job = os.path.join(RESTART_QUEUE, os.path.basename(os.ttyname(0)))
         return time.time() - os.path.getmtime(job) < 120
     except OSError:
         return False

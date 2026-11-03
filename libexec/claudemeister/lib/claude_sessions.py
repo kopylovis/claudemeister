@@ -9,16 +9,16 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import DEV, HOME, confirm, has_flag, paint, projects, tilde, write_json
+from mnrhlib import CACHE, CLAUDE_HOME, DEV, HOME, NOTICES, UUID_RE, confirm, has_flag, paint, projects, tilde, write_json
 from menu import pick
 import claude_search
 
-CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
+CLAUDE = CLAUDE_HOME
 PROJECTS = os.path.join(CLAUDE, "projects")
 CLAUDE_BIN = os.environ.get("MNRH_CLAUDE_BIN", "claude")
-UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+UUID = UUID_RE
 # что claudemeister хранит про сессию сам: резервные копии slim, последний ответ для уведомлений, humanize, guard
-SESSION_CACHES = [os.path.join(HOME, ".cache", "mnrh", sub, "{sid}" + tail) for sub, tail in
+SESSION_CACHES = [os.path.join(CACHE, sub, "{sid}" + tail) for sub, tail in
                   (("slim-backup", ".*.jsonl.gz"), ("notify", ".json"), ("humanize", ".*"), ("guard", ".json"),
                    ("notice", ".json"))]
 
@@ -698,7 +698,7 @@ def fast_session(sid):
 
 
 def slim_notice(sid, **fields):
-    path = os.path.join(HOME, ".cache", "mnrh", "notice", sid + ".json")
+    path = os.path.join(NOTICES, sid + ".json")
     try:
         with open(path) as f:
             data = json.load(f)
