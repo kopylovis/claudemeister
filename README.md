@@ -217,12 +217,19 @@ The same search is available to Claude as the MCP tools `session_search` and `se
 set up RuStore signing in sightra?" and Claude finds it in past sessions and reads the right spot. The index
 covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools) and
 the summaries after `/compact`. Tool outputs and system messages aren't indexed. All words must appear in one
-message, case doesn't matter, and each word matches as a substring, so give a stem: `sign` rather than
-`signing`. Put phrases in quotes. The current session is excluded.
+message (if no message has them all, messages with at least half of them are shown). Case and word form don't
+matter: words are reduced to their stems (a Snowball stemmer for Russian, the first Porter steps for English),
+so `сессия` finds `сессии` and `signing` finds `signed`. Hyphens split words, and a hyphenated word or a phrase in
+quotes must appear in that order: `прокси-соединение` finds `прокси-соединения`. A fragment that is already a
+stem, 3 letters or longer, also matches longer words (`fastl` finds `fastlane`). Common words such as `как`,
+`мы`, `the` are skipped. Results are ranked with BM25 over messages: sessions with the best-matching messages come
+first, with a small bonus for recent ones, and within a session the best snippets are shown first. The current
+session is excluded.
 
-The index lives in `~/.cache/mnrh/sessions-index/<id>.json` and holds only text (about 1 MB for a 481 MB
-session). The first pass over all sessions takes a couple of seconds. After that only new lines are read, and a
-query takes a fraction of a second. The index is refreshed in the background when each session starts (the
+The index lives in `~/.cache/mnrh/sessions-index/`: `<id>.json` holds only text (about 1 MB for a 481 MB
+session) and `<id>.terms.json` the stems of each message (about 40% of the text size). The first pass over
+all sessions takes a few seconds (4 s for 700 MB of transcripts). After that only new lines are read, and a query
+takes under 0.1 s. The index is refreshed in the background when each session starts (the
 `SessionStart` hook). When a session is deleted, including through `/forget` and `sessions rm`, its index goes
 with it.
 

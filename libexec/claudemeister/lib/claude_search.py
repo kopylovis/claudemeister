@@ -1,16 +1,20 @@
 import glob
 import json
+import math
 import os
 import re
 import shlex
 from datetime import datetime
 
+import stemmer
 from mnrhlib import CLAUDE_HOME, HOME, UUID_RE, tilde, write_json
 
 CLAUDE = CLAUDE_HOME
 PROJECTS = os.path.join(CLAUDE, "projects")
 INDEX = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "mnrh", "sessions-index")
 VERSION = 2
+# основы слов лежат рядом в <id>.terms.json: хукам нужен только текст, а основы досчитываются при поиске
+TERMS_VERSION = 1
 UUID = UUID_RE
 REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 LOCAL = ("<command-name>", "<local-command-stdout>", "<local-command-stderr>", "<local-command-caveat>",
@@ -24,11 +28,16 @@ def index_path(sid):
     return os.path.join(INDEX, sid + ".json")
 
 
+def terms_path(sid):
+    return os.path.join(INDEX, sid + ".terms.json")
+
+
 def drop(sid):
-    try:
-        os.remove(index_path(sid))
-    except OSError:
-        pass
+    for p in (index_path(sid), terms_path(sid)):
+        try:
+            os.remove(p)
+        except OSError:
+            pass
 
 
 def sessions():
@@ -101,7 +110,7 @@ def update(sid, path):
         return None
     data = load_index(sid)
     if not data or data.get("path") != path or data.get("ino") != st.st_ino or data.get("offset", 0) > st.st_size:
-        data = {"v": VERSION, "path": path, "ino": st.st_ino, "offset": 0, "cwd": None,
+        data = {"v": VERSION, "gen": os.urandom(4).hex(), "path": path, "ino": st.st_ino, "offset": 0, "cwd": None,
                 "custom": None, "ai": None, "prompt": None, "first": None, "last": None, "msgs": []}
     if data["offset"] == st.st_size:
         return data
@@ -147,7 +156,7 @@ def refresh():
         if data:
             out[sid] = data
     for f in glob.glob(os.path.join(glob.escape(INDEX), "*.json")):
-        if os.path.basename(f)[:-5] not in found:
+        if os.path.basename(f).split(".")[0] not in found:
             try:
                 os.remove(f)
             except OSError:
@@ -203,18 +212,123 @@ def age_days(ts):
     return (datetime.now(dt.tzinfo) - dt).total_seconds() / 86400
 
 
-def terms_of(query):
+def load_terms(sid, data):
+    """Основы слов по сообщениям сессии: длина каждого сообщения и для каждой основы «i» или «i:сколько раз».
+    Досчитывает только сообщения, добавленные в индекс после прошлого раза."""
     try:
-        parts = shlex.split(query)
-    except ValueError:
-        parts = query.split()
-    return [p.lower() for p in parts if p.strip()]
+        with open(terms_path(sid), encoding="utf-8") as f:
+            t = json.load(f)
+    except (OSError, ValueError):
+        t = None
+    n = len(data["msgs"])
+    if not isinstance(t, dict) or t.get("v") != TERMS_VERSION or t.get("gen") != data.get("gen") \
+            or not isinstance(t.get("n"), int) or t["n"] > n:
+        t = {"v": TERMS_VERSION, "gen": data.get("gen"), "n": 0, "lens": [], "post": {}}
+    if t["n"] < n:
+        new = {}
+        for i in range(t["n"], n):
+            stems = stemmer.terms(data["msgs"][i][2])
+            t["lens"].append(len(stems))
+            counts = {}
+            for x in stems:
+                counts[x] = counts.get(x, 0) + 1
+            for x, c in counts.items():
+                new.setdefault(x, []).append(str(i) if c == 1 else f"{i}:{c}")
+        post = t["post"]
+        for x, items in new.items():
+            add = ",".join(items)
+            post[x] = post[x] + "," + add if x in post else add
+        t["n"] = n
+        os.makedirs(INDEX, mode=0o700, exist_ok=True)
+        write_json(terms_path(sid), t, mode=0o600, ensure_ascii=False, separators=(",", ":"))
+    return t
 
 
-def snippet(text, terms, width=320):
+def postings(raw):
+    out = {}
+    for item in raw.split(","):
+        i, _, c = item.partition(":")
+        out[int(i)] = int(c) if c else 1
+    return out
+
+
+class Query:
+    """Запрос: основы слов, фразы (слова в кавычках или через дефис) и исходные слова для подсказок."""
+    # слово запроса, которое уже само себе основа (подпис, fastl, keystor), от 3 букв находит и более длинные:
+    # fastl → fastlane. Полное слово ищется только по своей основе, иначе «подпись» нашла бы и «подписку»
+    PREFIX_MIN = 3
+    PREFIX_WEIGHT = 0.5
+
+    def __init__(self, text):
+        try:
+            parts = shlex.split(text)
+        except ValueError:
+            parts = text.split()
+        self.phrases, self.terms, self.words, self.prefix = [], [], {}, set()
+        for part in parts:
+            sp = stemmer.spans(part)
+            for x, a, b in sp:
+                if x not in self.terms:
+                    self.terms.append(x)
+                    self.words[x] = part[a:b].lower()
+                    if len(x) >= self.PREFIX_MIN and x == self.words[x].replace("ё", "е"):
+                        self.prefix.add(x)
+            if len(sp) > 1:
+                self.phrases.append([x for x, _, _ in sp])
+
+    def matches(self, stem, term):
+        return stem == term or (term in self.prefix and stem.startswith(term))
+
+    def variants(self, vocab):
+        """Для каждой основы запроса — основы индекса, которые она находит, с весом."""
+        out = {}
+        for q in self.terms:
+            got = {q: 1.0} if q in vocab else {}
+            if q in self.prefix:
+                for v in vocab:
+                    if v != q and v.startswith(q):
+                        got[v] = self.PREFIX_WEIGHT
+            out[q] = got
+        return out
+
+    def phrase_ok(self, text):
+        if not self.phrases:
+            return True
+        stems = [x for x, _, _ in stemmer.spans(text)]
+        for ph in self.phrases:
+            if not any(all(self.matches(stems[i + k], q) for k, q in enumerate(ph))
+                       for i in range(len(stems) - len(ph) + 1)):
+                return False
+        return True
+
+
+def term_hits(t, variants):
+    """{основа запроса: {номер сообщения: вес совпадений}} для одной сессии."""
+    post = t["post"]
+    out = {}
+    for q, vs in variants.items():
+        hits = {}
+        for v, w in vs.items():
+            raw = post.get(v)
+            if raw:
+                for i, c in postings(raw).items():
+                    hits[i] = hits.get(i, 0) + c * w
+        out[q] = hits
+    return out
+
+
+def snippet(text, query, idf=None, width=320):
+    """Кусок текста вокруг места, где рядом больше всего разных слов запроса (редкие слова весят больше)."""
     flat = " ".join(text.split())
-    low = flat.lower()
-    pos = min((low.find(t) for t in terms if t in low), default=0)
+    found = [(a, q) for x, a, _ in stemmer.spans(flat) for q in query.terms if query.matches(x, q)]
+    pos = 0
+    if found:
+        best = -1.0
+        for a, _ in found:
+            near = {q for b, q in found if a <= b < a + width * 2 // 3}
+            score = sum((idf or {}).get(q, 1.0) for q in near)
+            if score > best:
+                best, pos = score, a
     start = max(0, pos - width // 3)
     piece = flat[start:start + width]
     return ("…" if start else "") + piece + ("…" if start + width < len(flat) else "")
@@ -227,57 +341,82 @@ def matches_project(data, project):
         (p in ("~", "root", "home") and cwd == HOME.lower())
 
 
+K1, B = 1.2, 0.75
+
+
 def search(query, project=None, days=None, roles=None, limit=8, exclude=None):
-    terms = terms_of(query)
-    if not terms:
+    """BM25 по сообщениям: все слова в одном сообщении (или хотя бы половина, если так ничего нет),
+    сессии по сумме трёх лучших сообщений с небольшой прибавкой за свежесть."""
+    if not query.strip():
         return "Пустой запрос: дай хотя бы одно слово.", True
+    q = Query(query)
+    if not q.terms:
+        return f"В запросе «{query}» одни служебные слова (как, мы, в…), а они не индексируются. Дай слова по теме.", True
     idx = refresh()
     exclude = set(exclude or [])
-    hits, partial, seen_terms = [], [], set()
+    scope = []
     for sid, data in idx.items():
         if sid in exclude or (project and not matches_project(data, project)):
             continue
         if days and (age_days(data.get("last")) or 0) > days:
             continue
+        scope.append((sid, data, load_terms(sid, data)))
+    vocab = set()
+    for _, _, t in scope:
+        vocab.update(t["post"])
+    variants = q.variants(vocab)
+    total = sum(len(t["lens"]) for _, _, t in scope) or 1
+    avgdl = sum(sum(t["lens"]) for _, _, t in scope) / total or 1.0
+    per_session = [(sid, data, t, term_hits(t, variants)) for sid, data, t in scope]
+    df = {x: sum(len(h[x]) for *_, h in per_session) for x in q.terms}
+    idf = {x: math.log(1 + (total - df[x] + 0.5) / (df[x] + 0.5)) for x in q.terms}
+    need = len(q.terms)
+    hits, partial = [], []
+    for sid, data, t, h in per_session:
+        candidates = {}
+        for x in q.terms:
+            for i in h[x]:
+                candidates[i] = candidates.get(i, 0) + 1
         full, half = [], []
-        for i, (role, ts, text) in enumerate(data["msgs"]):
+        for i, got in candidates.items():
+            role = data["msgs"][i][0]
             if roles and role not in roles:
                 continue
-            low = text.lower()
-            got = [t for t in terms if t in low]
-            seen_terms.update(got)
-            if len(got) == len(terms):
-                full.append(i)
-            elif len(got) * 2 >= len(terms) and len(terms) > 1:
-                half.append((len(got), i))
-        if full:
-            hits.append((sid, data, full))
-        elif half:
-            partial.append((sid, data, [i for _, i in sorted(half, reverse=True)]))
-
-    def last_ts(entry):
-        sid, data, found = entry
-        return max((data["msgs"][i][1] or "" for i in found), default="")
-
+            if got < need and (need == 1 or got * 2 < need):
+                continue
+            norm = K1 * (1 - B + B * t["lens"][i] / avgdl)
+            score = sum(idf[x] * h[x][i] * (K1 + 1) / (h[x][i] + norm) for x in q.terms if i in h[x])
+            if got == need and q.phrase_ok(data["msgs"][i][2]):
+                full.append((score, i))
+            else:
+                half.append((score, i))
+        for found, bucket in ((full, hits), (half, partial)):
+            if found:
+                found.sort(key=lambda x: (-x[0], x[1]))
+                top = sum(s * w for (s, _), w in zip(found, (1, 0.5, 0.25)))
+                age = age_days(data.get("last"))
+                fresh = 1 + 0.3 / (1 + (age if age is not None and age > 0 else 0) / 14)
+                bucket.append((top * fresh, sid, data, [i for _, i in found]))
     exact = bool(hits)
-    chosen = sorted(hits or partial, key=last_ts, reverse=True)
-    scope = (f" в проекте «{project}»" if project else "") + (f" за {days} дн." if days else "")
+    chosen = sorted(hits or partial, key=lambda x: (-x[0], x[1]))
+    where = (f" в проекте «{project}»" if project else "") + (f" за {days} дн." if days else "")
     if not chosen:
-        missing = [t for t in terms if t not in seen_terms]
-        text = f"По запросу «{query}»{scope} ничего не нашёл (просмотрено сессий: {len(idx)})."
+        missing = [q.words[x] for x in q.terms if not df[x]]
+        text = f"По запросу «{query}»{where} ничего не нашёл (просмотрено сессий: {len(scope)})."
         if missing:
-            text += " Нигде не встречается: " + ", ".join(missing) + ". Попробуй основу слова (подпис, а не подписью)."
+            text += (" Нигде не встречается: " + ", ".join(missing) + ". Формы слова уже учтены "
+                     "(сессия найдёт и сессии), так что проверь написание или попробуй другое слово.")
         return text, False
-    lines = [f"Сессий с совпадениями{scope}: {len(chosen)}"
+    lines = [f"Сессий с совпадениями{where}: {len(chosen)}"
              f"{'' if exact else ' (только частичные: не все слова в одном сообщении)'}. "
-             f"Показаны {min(limit, len(chosen))}, свежие сверху."]
-    for sid, data, found in chosen[:limit]:
+             f"Показаны {min(limit, len(chosen))}, лучшие совпадения сверху."]
+    for _, sid, data, found in chosen[:limit]:
         lines.append("")
         lines.append(f"■ {sid[:8]}  {folder(data)}  {when(data.get('last'))}  «{title(sid, data)}»  "
                      f"совпадений: {len(found)}")
         for i in found[:3]:
             role, ts, text = data["msgs"][i]
-            lines.append(f"  #{i} [{ROLES.get(role, role)} {when(ts)}] {snippet(text, terms)}")
+            lines.append(f"  #{i} [{ROLES.get(role, role)} {when(ts)}] {snippet(text, q, idf)}")
         if len(found) > 3:
             more = ", ".join(f"#{i}" for i in found[3:18])
             lines.append(f"  ещё: {more}{' …' if len(found) > 18 else ''}")
@@ -314,8 +453,11 @@ def read(ref, at=None, query=None, before=2, after=8, max_chars=2000, full=False
         return head + "\nВ ней нет ни одного сообщения.", False
     note = ""
     if query:
-        terms = terms_of(query)
-        found = [i for i, (_, _, t) in enumerate(msgs) if all(x in t.lower() for x in terms)]
+        q = Query(query)
+        t = load_terms(sid, data)
+        h = term_hits(t, q.variants(t["post"]))
+        found = sorted(i for i in set.intersection(*(set(h[x]) for x in q.terms)) if q.phrase_ok(msgs[i][2])) \
+            if q.terms else []
         if not found:
             return head + f"\n«{query}» в этой сессии не встречается.", False
         at = found[0] if at is None else at
@@ -357,9 +499,11 @@ SEARCH_TOOL = {
         "Поиск по всем прошлым сессиям Claude Code на этом Mac (все проекты): запросы пользователя, твои ответы, "
         "выполненные команды и сводки после /compact. Используй, когда пользователь ссылается на прошлую работу "
         "(«как мы делали…», «в прошлый раз», «в сессии sightra»), или когда решение, скорее всего, уже "
-        "находили раньше. Все слова должны встретиться в одном сообщении, регистр не важен, слово ищется как "
-        "подстрока — давай основы слов (подпис, keystore, fastlane). Фразу — в кавычках. Текущая сессия "
-        "не ищется. Дальше открывай найденное через session_read."),
+        "находили раньше. Все слова должны встретиться в одном сообщении, регистр и форма слова не важны "
+        "(сессия найдёт сессии, signing найдёт signed), обрубок слова от 3 букв (fastl, подпис) находит "
+        "и слова длиннее. Служебные слова (как, мы, the) не учитываются. Фразу или слова через дефис "
+        "ищет подряд. Сверху сессии и сообщения, где совпадение лучше. Текущая сессия не ищется. "
+        "Дальше открывай найденное через session_read."),
     "annotations": {"readOnlyHint": True},
     "inputSchema": {
         "type": "object",
