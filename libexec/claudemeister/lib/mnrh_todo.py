@@ -161,12 +161,12 @@ def handle(name, a, cwd=None):
 
 
 def usage():
-    print("mnrh todo                      бэклог этого проекта (папка git, где ты сейчас)")
-    print("mnrh todo <текст>              добавить задачу; то же: mnrh todo add <текст>")
-    print("mnrh todo done <N|текст>       отметить сделанной")
-    print("mnrh todo rm <N|текст>         удалить")
-    print("mnrh todo all                  открытые задачи всех проектов")
-    print("mnrh todo -p <проект> …        для другого проекта")
+    print("claudemeister todo                 бэклог этого проекта (папка git, где ты сейчас)")
+    print("claudemeister todo <текст>         добавить задачу; то же: claudemeister todo add <текст>")
+    print("claudemeister todo done <N|текст>  отметить сделанной")
+    print("claudemeister todo rm <N|текст>    удалить")
+    print("claudemeister todo all             открытые задачи всех проектов")
+    print("claudemeister todo -p <проект> …   для другого проекта")
     print()
     print(f"Хранится в {tilde(TODO_DIR)}/<проект>.md. В Claude Code: /todo, инструменты todo_list, todo_add,")
     print("todo_done, а при старте сессии Claude видит открытые задачи проекта.")
@@ -186,7 +186,7 @@ def cli(args):
         return 0
     root, err = root_for(project)
     if err:
-        print(f"mnrh todo: {err}")
+        print(f"claudemeister todo: {err}")
         return 1
     if not args or args[:1] == ["list"]:
         text, bad = fmt(root), False

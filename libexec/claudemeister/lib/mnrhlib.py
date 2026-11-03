@@ -1,11 +1,27 @@
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 
 HOME = os.path.expanduser("~")
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
+# Команда claudemeister для хуков, MCP и перезапуска. Сначала из PATH: путь /opt/homebrew/bin/claudemeister
+# переживает brew upgrade, а путь в Cellar нет.
+CM = shutil.which("claudemeister") or os.path.join(ROOT, "bin", "claudemeister")
+# Полный mnrh, если стоит: на нем mac_status, free_memory и сон с закрытой крышкой (mnrh sleep lid).
+MNRH = shutil.which("mnrh")
+
+
+def hook_command(sub):
+    return f"{shlex.quote(CM)} {sub}"
+
+
+def is_hook(command, sub):
+    """Хук claudemeister <sub> или старый, из mnrh: mnrh claude <sub>."""
+    return re.search(rf"(?:\bclaude|claudemeister)\s+{re.escape(sub)}(?:\s|$)", command or "") is not None
 TTY = sys.stdout.isatty()
 
 

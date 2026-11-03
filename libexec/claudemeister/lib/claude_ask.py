@@ -64,8 +64,8 @@ TOOL = {
 def main():
     args = sys.argv[2:] if sys.argv[1:2] == ["ask"] else sys.argv[1:]
     if len(args) < 2 or args[0] in ("-h", "--help"):
-        print("mnrh claude ask <проект> <вопрос>   спросить отдельный Claude про другой проект (только чтение)")
-        print("mnrh claude ask <проект> <вопрос> --model opus")
+        print("claudemeister ask <проект> <вопрос>   спросить отдельный Claude про другой проект (только чтение)")
+        print("claudemeister ask <проект> <вопрос> --model opus")
         print()
         print("В Claude Code: /ask <проект> <вопрос> или инструмент ask_project.")
         return 0 if args[:1] in (["-h"], ["--help"]) else 2

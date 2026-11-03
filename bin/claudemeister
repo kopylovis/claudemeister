@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+resolve_root() {
+  local src="${BASH_SOURCE[0]}" dir
+  while [ -L "$src" ]; do
+    dir=$(cd -P "$(dirname "$src")" && pwd)
+    src=$(readlink "$src")
+    case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+  done
+  cd -P "$(dirname "$src")/.." && pwd
+}
+
+ROOT=$(resolve_root)
+LIBEXEC="$ROOT/libexec/claudemeister"
+
+case "${1:-}" in
+  --version|-v)   cat "$ROOT/VERSION" ;;
+  help|-h|--help) exec /bin/bash "$LIBEXEC/claude.sh" -h ;;
+  todo|shot|deps) cmd="$1"; shift; exec /usr/bin/python3 "$LIBEXEC/$cmd.py" "$@" ;;
+  *)              exec /bin/bash "$LIBEXEC/claude.sh" "$@" ;;
+esac

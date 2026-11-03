@@ -48,7 +48,7 @@ def forget_token():
 def call(method, tok=None, wait=15, **params):
     tok = tok or token()
     if not tok:
-        raise TelegramError("бот не подключён: mnrh claude notify telegram")
+        raise TelegramError("бот не подключён: claudemeister notify telegram")
     data = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None}).encode()
     try:
         with urllib.request.urlopen(urllib.request.Request(API.format(tok, method), data=data),
@@ -173,16 +173,16 @@ def setup():
         print(f"✗ {e}")
         return 1
     if not ch:
-        print("Не дождался /start. Запусти mnrh claude notify telegram ещё раз.")
+        print("Не дождался /start. Запусти claudemeister notify telegram ещё раз.")
         return 1
     write_config(telegram_chat=str(ch["id"]), telegram_bot=name)
     who = " ".join(x for x in (ch.get("first_name"), ch.get("last_name")) if x) or ch.get("username") or ch["id"]
     try:
-        call("sendMessage", chat_id=ch["id"], text="mnrh подключён ✓ Сюда будут приходить уведомления Claude, "
+        call("sendMessage", chat_id=ch["id"], text="claudemeister подключён ✓ Сюда будут приходить уведомления Claude, "
                                                    "когда ты не за Mac.")
     except TelegramError:
         pass
-    print(f"✓ подключено к чату с {who}. Если это не ты — mnrh claude notify telegram off")
+    print(f"✓ подключено к чату с {who}. Если это не ты — claudemeister notify telegram off")
     print(f"Уведомления идут в Telegram, когда ты не за Mac: экран заблокирован или {away_after() // 60} мин "
           f"без мыши и клавиатуры.")
     return 0
@@ -190,7 +190,7 @@ def setup():
 
 def describe():
     if not configured():
-        return "Telegram: не подключён — mnrh claude notify telegram"
+        return "Telegram: не подключён — claudemeister notify telegram"
     bot = read_config().get("telegram_bot", "")
     when = "всегда" if mode() == "always" else f"когда ты не за Mac (блокировка или {away_after()} с без ввода)"
     return f"Telegram: @{bot}, {when}"
@@ -218,7 +218,7 @@ def main(args):
     if cmd == "away":
         if len(args) > 1:
             if not args[1].isdigit():
-                print("mnrh claude notify telegram away <секунд без ввода>")
+                print("claudemeister notify telegram away <секунд без ввода>")
                 return 2
             write_config(telegram_away=args[1])
         write_config(telegram_when="away")
@@ -226,11 +226,11 @@ def main(args):
         return 0
     if cmd == "test":
         try:
-            send("mnrh: пробное уведомление", "Claude Code", "Так будут выглядеть уведомления, когда ты не за Mac.")
+            send("claudemeister: пробное уведомление", "Claude Code", "Так будут выглядеть уведомления, когда ты не за Mac.")
         except TelegramError as e:
             print(f"✗ {e}")
             return 1
         print("✓ отправлено в Telegram")
         return 0
-    print("mnrh claude notify telegram [test | off | always | away [сек]]")
+    print("claudemeister notify telegram [test | off | always | away [сек]]")
     return 2

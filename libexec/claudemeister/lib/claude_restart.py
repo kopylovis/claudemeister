@@ -12,7 +12,7 @@ import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, PROMPTSILL_HINT, promptsill_path, settings_path, tilde
+from mnrhlib import CM, HOME, MNRH, PROMPTSILL_HINT, hook_command, is_hook, promptsill_path, settings_path, tilde
 import claude_mac
 import claude_open
 import claude_search
@@ -26,8 +26,6 @@ import window_shot
 CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
 CLAUDE_BIN = os.environ.get("MNRH_CLAUDE_BIN", "claude")
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-claude-restart.log")
-MNRH = shutil.which("mnrh") or os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "bin", "mnrh")
 COMMANDS = os.path.join(CLAUDE, "commands")
 COMMAND_FILE = os.path.join(COMMANDS, "restart.md")
 FORGET_FILE = os.path.join(COMMANDS, "forget.md")
@@ -40,6 +38,11 @@ QUEUE = os.path.join(HOME, ".cache", "mnrh", "restart")
 NOTICES = os.path.join(HOME, ".cache", "mnrh", "notice")
 NOTICE_TTL = 300
 SETTINGS = os.path.join(CLAUDE, "settings.json")
+MCP_NAME = "claudemeister"
+# Так MCP-сервер назывался, пока claudemeister был частью mnrh (mnrh claude mcp). setup его убирает.
+OLD_MCP_NAME = "mnrh"
+# Строка хука перезапуска в ~/.zshrc: новая и та, что ставил mnrh
+ZSH_MARKERS = ("share/claudemeister/restart.zsh", "share/mnrh/restart.zsh")
 ZSHRC = os.path.join(os.environ.get("ZDOTDIR") or HOME, ".zshrc")
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 DROP_WITH_VALUE = {"-r", "--resume", "--session-id", "--fork-session", "-p", "--print"}
@@ -190,9 +193,9 @@ def no_hook_reason(pid, term):
                 "и запусти claude там")
     if parent != "zsh":
         return head + f"shell здесь {parent}, а хук есть только для zsh"
-    hooked = any("share/mnrh/restart.zsh" in l for l in zshrc_lines())
+    hooked = any(is_zsh_hook(l) for l in zshrc_lines())
     if not hooked:
-        return head + f"в {tilde(ZSHRC)} нет строки с хуком. Выполни mnrh claude setup и открой новую вкладку"
+        return head + f"в {tilde(ZSHRC)} нет строки с хуком. Выполни claudemeister setup и открой новую вкладку"
     return (head + f"в {tilde(ZSHRC)} он есть, но эта вкладка открыта раньше. Открой новую вкладку терминала "
             "и запусти claude там")
 
@@ -229,17 +232,17 @@ def plan(update=True, forget=False, slim=False, fresh=False):
         flags = drop_name(flags)
 
     new_sid = str(uuid.uuid4()) if new else sid
-    # сессия через VPS (mnrh claude -x): её окружение досталось и нам, перезапускаем тоже через VPS
-    proxy = [MNRH, "claude", "proxy", "run", "--"] if os.environ.get("MNRH_PROXY") else []
+    # сессия через VPS (claudemeister -x): её окружение досталось и нам, перезапускаем тоже через VPS
+    proxy = [CM, "proxy", "run", "--"] if os.environ.get("MNRH_PROXY") else []
     run = (proxy + (["caffeinate"] + caffeinate if caffeinate is not None else []) + [CLAUDE_BIN]
            + (["--session-id", new_sid] if new else ["--resume", sid]) + flags)
     update = update and not new and not slim
-    keep = (f"/usr/bin/python3 {shlex.quote(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lid.py'))} "
-            "keep >/dev/null 2>&1; " if caffeinate is not None else "")
+    # сон с закрытой крышкой держит mnrh sleep lid, он есть только в полном mnrh
+    keep = f"{shlex.quote(MNRH)} sleep lid keep >/dev/null 2>&1; " if caffeinate is not None and MNRH else ""
     line = (f"cd {shlex.quote(cwd)} && " + keep
             + (f"{{ {shlex.quote(CLAUDE_BIN)} update; " if update else "{ ")
             + ("clear; printf '\\033[3J'; " if new else "")
-            + (f"{shlex.quote(MNRH)} claude sessions slim {sid} -y --notice; " if slim else "")
+            + (f"{shlex.quote(CM)} sessions slim {sid} -y --notice; " if slim else "")
             + shlex.join(run) + "; }")
     return {"pid": pid, "sid": sid, "cwd": cwd, "tty": tty, "term": term, "via": via, "line": line, "forget": forget,
             "slim": slim, "fresh": fresh,
@@ -345,28 +348,28 @@ def notice_text(n):
     now = claude_version()
     if n["kind"] == "slim":
         if n.get("status") == "done":
-            return (f"✓ mnrh: сессия «{title}» сжата: {n.get('before')} → {n.get('after')}, скриншотов убрано "
+            return (f"✓ claudemeister: сессия «{title}» сжата: {n.get('before')} → {n.get('after')}, скриншотов убрано "
                     f"{n.get('images', 0)}. То, что видит модель, не менялось. Вернуть: "
-                    f"mnrh claude sessions slim {n.get('old_sid', '')[:8]} --undo")
+                    f"claudemeister sessions slim {n.get('old_sid', '')[:8]} --undo")
         if n.get("status") == "failed":
-            return f"! mnrh: сессию «{title}» сжать не удалось ({n.get('error')}). Она открыта без изменений."
-        return f"… mnrh: сессия «{title}» открыта, но сжатие не отчиталось — проверь: mnrh claude sessions slim"
+            return f"! claudemeister: сессию «{title}» сжать не удалось ({n.get('error')}). Она открыта без изменений."
+        return f"… claudemeister: сессия «{title}» открыта, но сжатие не отчиталось — проверь: claudemeister sessions slim"
     if n["kind"] == "restart":
         was = n.get("version")
         if was and now and was != now:
             ver = f"обновлён {was} → {now}"
         else:
             ver = f"версия {now or was}" + (", обновлений не было" if was and now else "")
-        return f"✓ mnrh: Claude Code перезапущен ({ver}). Сессия «{title}» продолжается."
+        return f"✓ claudemeister: Claude Code перезапущен ({ver}). Сессия «{title}» продолжается."
     if n["kind"] == "fresh":
-        return (f"✓ mnrh: новая чистая сессия. Прошлая «{title}» сохранена, вернуться к ней: "
+        return (f"✓ claudemeister: новая чистая сессия. Прошлая «{title}» сохранена, вернуться к ней: "
                 f"/resume или claude --resume {n.get('old_sid', '')}")
     if n.get("status") == "done":
-        return (f"✓ mnrh: прошлая сессия «{title}» удалена — переписка, история запросов и file-history. "
+        return (f"✓ claudemeister: прошлая сессия «{title}» удалена — переписка, история запросов и file-history. "
                 "Это новая чистая сессия.")
     if n.get("status") == "failed":
-        return f"! mnrh: прошлую сессию «{title}» не удалось найти и удалить, проверь: mnrh claude sessions -l"
-    return f"… mnrh: прошлая сессия «{title}» ещё удаляется, проверь позже: mnrh claude sessions -l"
+        return f"! claudemeister: прошлую сессию «{title}» не удалось найти и удалить, проверь: claudemeister sessions -l"
+    return f"… claudemeister: прошлая сессия «{title}» ещё удаляется, проверь позже: claudemeister sessions -l"
 
 
 def hook_payload():
@@ -544,27 +547,27 @@ def cli(args, forget=False, fresh=False):
     name = "forget" if forget else "fresh" if fresh else "restart"
     if "-h" in args or "--help" in args:
         if fresh:
-            print("mnrh claude fresh              изнутри Claude Code: закрыть его и открыть новую сессию без названия")
+            print("claudemeister fresh              изнутри Claude Code: закрыть его и открыть новую сессию без названия")
             print("                               и с пустым контекстом в той же папке и вкладке; эта остаётся в /resume")
-            print("mnrh claude fresh --dry-run    только показать, что будет сделано")
+            print("claudemeister fresh --dry-run    только показать, что будет сделано")
         elif forget:
-            print("mnrh claude forget             изнутри Claude Code: закрыть его, удалить эту сессию без следа")
+            print("claudemeister forget             изнутри Claude Code: закрыть его, удалить эту сессию без следа")
             print("                               (переписка, история запросов, file-history) и открыть чистый Claude")
             print("                               в той же папке и вкладке — как /clear, только старое не сохраняется")
-            print("mnrh claude forget --dry-run   только показать, что будет сделано")
+            print("claudemeister forget --dry-run   только показать, что будет сделано")
         else:
-            print("mnrh claude restart            изнутри Claude Code: закрыть его и открыть эту же сессию в той же вкладке")
+            print("claudemeister restart            изнутри Claude Code: закрыть его и открыть эту же сессию в той же вкладке")
             print("                               перед запуском выполняется claude update")
-            print("mnrh claude restart --no-update   без обновления")
-            print("mnrh claude restart --dry-run     только показать, что будет сделано")
+            print("claudemeister restart --no-update  без обновления")
+            print("claudemeister restart --dry-run    только показать, что будет сделано")
         print()
-        print(f"Обычно вызывается из Claude: /{name} или инструментом {name} из MCP-сервера mnrh")
-        print("(установить: mnrh claude setup). Лог: " + tilde(LOG))
+        print(f"Обычно вызывается из Claude: /{name} или инструментом {name} из MCP-сервера claudemeister")
+        print("(установить: claudemeister setup). Лог: " + tilde(LOG))
         return 0
     try:
         p = restart(update="--no-update" not in args, dry="--dry-run" in args, forget=forget, fresh=fresh)
     except RestartError as e:
-        print(f"mnrh claude {name}: {e}", file=sys.stderr)
+        print(f"claudemeister {name}: {e}", file=sys.stderr)
         return 1
     if "--dry-run" in args:
         extra = f"удалю сессию {p['sid']}, " if forget else ""
@@ -611,13 +614,13 @@ def slim_current(dry=False, delay=1.5):
 def cli_slim(args):
     import claude_sessions
     if "-h" in args or "--help" in args:
-        print("mnrh claude slim            изнутри Claude Code: закрыть его, сжать эту сессию (старые скриншоты и")
+        print("claudemeister slim            изнутри Claude Code: закрыть его, сжать эту сессию (старые скриншоты и")
         print("                            длинные выводы до двух последних /compact) и открыть её снова")
-        print("mnrh claude slim --dry-run  только посчитать")
-        print("mnrh claude slim list       что можно сжать среди закрытых сессий")
-        print("mnrh claude slim <id>       сжать закрытую сессию (вернуть: mnrh claude sessions slim <id> --undo)")
+        print("claudemeister slim --dry-run  только посчитать")
+        print("claudemeister slim list       что можно сжать среди закрытых сессий")
+        print("claudemeister slim <id>       сжать закрытую сессию (вернуть: claudemeister sessions slim <id> --undo)")
         print()
-        print("Обычно вызывается из Claude: /slim или инструментом slim из MCP-сервера mnrh.")
+        print("Обычно вызывается из Claude: /slim или инструментом slim из MCP-сервера claudemeister.")
         return 0
     rest = [a for a in args if a != "--dry-run"]
     if rest[:1] == ["list"]:
@@ -627,7 +630,7 @@ def cli_slim(args):
     try:
         text, _ = slim_current(dry="--dry-run" in args)
     except RestartError as e:
-        print(f"mnrh claude slim: {e}", file=sys.stderr)
+        print(f"claudemeister slim: {e}", file=sys.stderr)
         return 1
     print(text)
     return 0
@@ -667,7 +670,7 @@ FRESH_TOOL = {
 }
 
 
-def mnrh_version():
+def version():
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
     try:
         with open(os.path.join(root, "VERSION")) as f:
@@ -727,7 +730,7 @@ HANDLERS = {
     "forget": lambda a: call_restart("forget", a),
     "fresh": lambda a: call_restart("fresh", a),
     "slim": call_slim,
-    "open_claude": lambda a: claude_open.open_claude(a, MNRH),
+    "open_claude": lambda a: claude_open.open_claude(a, CM),
     "session_search": lambda a: claude_search.handle("session_search", a, current_sid()),
     "session_read": lambda a: claude_search.handle("session_read", a),
     "mac_status": lambda a: claude_mac.handle("mac_status", a, MNRH),
@@ -738,13 +741,14 @@ HANDLERS = {
     "todo_done": lambda a: mnrh_todo.handle("todo_done", a, os.getcwd()),
     "release_notes_context": lambda a: release_notes.handle("release_notes_context", a, os.getcwd()),
     "release_notes_write": lambda a: release_notes.handle("release_notes_write", a, os.getcwd()),
-    "parallel_task": lambda a: claude_parallel.handle("parallel_task", a, os.getcwd(), MNRH),
+    "parallel_task": lambda a: claude_parallel.handle("parallel_task", a, os.getcwd(), CM),
     "parallel_list": lambda a: claude_parallel.handle("parallel_list", a, os.getcwd()),
     "parallel_finish": lambda a: claude_parallel.handle("parallel_finish", a, os.getcwd()),
     "window_screenshot": lambda a: window_shot.handle(a),
     "ask_project": lambda a: claude_ask.ask(a.get("project"), a.get("question"), a.get("model")),
 }
-EXTRA_TOOLS = (claude_search.TOOLS + claude_mac.TOOLS + [gradle_deps.TOOL] + mnrh_todo.TOOLS + release_notes.TOOLS
+# mac_status и free_memory запускают команды mnrh, поэтому они есть, только когда стоит полный mnrh
+EXTRA_TOOLS = (claude_search.TOOLS + (claude_mac.TOOLS if MNRH else []) + [gradle_deps.TOOL] + mnrh_todo.TOOLS + release_notes.TOOLS
                + claude_parallel.TOOLS + [window_shot.TOOL, claude_ask.TOOL])
 READ_ONLY = [t["name"] for t in EXTRA_TOOLS if (t.get("annotations") or {}).get("readOnlyHint")] + \
     ["todo_add", "todo_done"]
@@ -772,7 +776,7 @@ def mcp():
             send({"jsonrpc": "2.0", "id": rid, "result": {
                 "protocolVersion": ver,
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "mnrh", "version": mnrh_version()}}})
+                "serverInfo": {"name": MCP_NAME, "version": version()}}})
         elif method == "tools/list":
             send({"jsonrpc": "2.0", "id": rid, "result": {"tools": tools()}})
         elif method == "tools/call":
@@ -800,24 +804,24 @@ def mcp():
 EXTRA_SLASH = {
     "todo": """---
 description: Бэклог проекта между сессиями: /todo — список, /todo <текст> — добавить, /todo done <N> — сделано
-allowed-tools: Bash(mnrh todo:*)
+allowed-tools: Bash(claudemeister todo:*)
 ---
-!`mnrh todo $ARGUMENTS`
+!`claudemeister todo $ARGUMENTS`
 
 Покажи пользователю результат выше как есть, без своих действий и пояснений.
 """,
     "where": """---
 description: Где мы остановились: git, прошлая сессия в этом проекте, бэклог
-allowed-tools: Bash(mnrh claude brief:*)
+allowed-tools: Bash(claudemeister brief:*)
 ---
-!`mnrh claude brief`
+!`claudemeister brief`
 
 По справке выше коротко скажи пользователю, где остановились (что было сделано и в каком всё состоянии) и
 что логично делать дальше — 2–5 пунктов. Ничего не запускай и не меняй.
 """,
     "release-notes": """---
 description: Заметки к релизу «Что нового» на русском и английском для fastlane; аргументы — проект и/или --since <тег>
-allowed-tools: mcp__mnrh__release_notes_context, mcp__mnrh__release_notes_write, mcp__mnrh__session_search, mcp__mnrh__session_read
+allowed-tools: mcp__claudemeister__release_notes_context, mcp__claudemeister__release_notes_write, mcp__claudemeister__session_search, mcp__claudemeister__session_read
 ---
 Подготовь заметки к релизу. Аргументы пользователя: «$ARGUMENTS» (может быть имя проекта и --since <тег или коммит>).
 
@@ -829,7 +833,7 @@ allowed-tools: mcp__mnrh__release_notes_context, mcp__mnrh__release_notes_write,
 """,
     "parallel": """---
 description: Сделать задачу параллельно: отдельная ветка и worktree, второй Claude в новом окне; list — что идёт
-allowed-tools: mcp__mnrh__parallel_task, mcp__mnrh__parallel_list
+allowed-tools: mcp__claudemeister__parallel_task, mcp__claudemeister__parallel_list
 ---
 Аргументы: «$ARGUMENTS».
 
@@ -840,9 +844,9 @@ allowed-tools: mcp__mnrh__parallel_task, mcp__mnrh__parallel_list
 """,
     "shot": """---
 description: Снимок окна приложения (Chrome, Safari, Simulator…): /shot <приложение> [вопрос]; без аргументов — список окон
-allowed-tools: Bash(mnrh shot:*), Read
+allowed-tools: Bash(claudemeister shot:*), Read
 ---
-!`mnrh shot $1`
+!`claudemeister shot $1`
 
 Если выше путь к PNG — открой его инструментом Read и ответь на вопрос пользователя о снимке: «$ARGUMENTS»
 (первое слово — приложение). Если вопроса нет — коротко опиши, что видно. Если выше список окон или ошибка —
@@ -850,7 +854,7 @@ allowed-tools: Bash(mnrh shot:*), Read
 """,
     "ask": """---
 description: Спросить про другой проект: /ask <проект> <вопрос> — ответит отдельный Claude, только чтение
-allowed-tools: mcp__mnrh__ask_project
+allowed-tools: mcp__claudemeister__ask_project
 ---
 Аргументы: «$ARGUMENTS». Первое слово — проект, остальное — вопрос.
 
@@ -858,10 +862,10 @@ allowed-tools: mcp__mnrh__ask_project
 нужные факты, чтобы он был понятен без неё. Ответ перескажи пользователю коротко, сохранив пути и код.
 """,
     "humanize": """---
-description: mnrh humanization: писать без признаков нейросети; /humanize переключает, on, off, status
-allowed-tools: Bash(mnrh claude humanize:*)
+description: claudemeister humanization: писать без признаков нейросети; /humanize переключает, on, off, status
+allowed-tools: Bash(claudemeister humanize:*)
 ---
-!`mnrh claude humanize switch $ARGUMENTS`
+!`claudemeister humanize switch $ARGUMENTS`
 
 Если выше написано «включена» и есть свод правил, с этого ответа строго следуй ему во всём, что пишешь людям.
 Если «выключена», правила больше не обязательны. Ответь пользователю одной короткой фразой, в каком состоянии режим.
@@ -871,9 +875,9 @@ allowed-tools: Bash(mnrh claude humanize:*)
 
 SLIM_SLASH = """---
 description: Сжать эту сессию (старые скриншоты и длинные выводы) и открыть её снова; list — другие сессии
-allowed-tools: Bash(mnrh claude slim:*)
+allowed-tools: Bash(claudemeister slim:*)
 ---
-!`mnrh claude slim $ARGUMENTS`
+!`claudemeister slim $ARGUMENTS`
 
 Если выше написано «Сжимаю», Claude Code сейчас закроется сам: ничего не делай и ответь одним словом: «Сжимаю».
 Иначе коротко перескажи пользователю, что написано выше, без своих действий.
@@ -882,9 +886,9 @@ allowed-tools: Bash(mnrh claude slim:*)
 
 FORGET_SLASH = """---
 description: Забыть эту сессию без следа и открыть чистый Claude Code в той же папке
-allowed-tools: Bash(mnrh claude forget:*)
+allowed-tools: Bash(claudemeister forget:*)
 ---
-!`mnrh claude forget $ARGUMENTS`
+!`claudemeister forget $ARGUMENTS`
 
 Эта сессия сейчас удалится, и Claude Code откроется заново. Ничего не делай и ответь одним словом: «Забываю».
 """
@@ -892,9 +896,9 @@ allowed-tools: Bash(mnrh claude forget:*)
 
 FRESH_SLASH = """---
 description: Новая сессия без названия и с пустым контекстом; эта остаётся в /resume
-allowed-tools: Bash(mnrh claude fresh:*)
+allowed-tools: Bash(claudemeister fresh:*)
 ---
-!`mnrh claude fresh $ARGUMENTS`
+!`claudemeister fresh $ARGUMENTS`
 
 Claude Code сейчас закроется и откроется с новой сессией. Ничего не делай и ответь одним словом: «Открываю».
 """
@@ -902,20 +906,24 @@ Claude Code сейчас закроется и откроется с новой 
 
 SLASH = """---
 description: Перезапустить Claude Code с этой же сессией (с claude update перед запуском)
-allowed-tools: Bash(mnrh claude restart:*)
+allowed-tools: Bash(claudemeister restart:*)
 ---
-!`mnrh claude restart $ARGUMENTS`
+!`claudemeister restart $ARGUMENTS`
 
 Claude Code сейчас перезапустится сам. Ничего не делай и ответь одним словом: «Перезапускаюсь».
 """
 
 
+def is_zsh_hook(line):
+    return any(m in line for m in ZSH_MARKERS)
+
+
 def hook_file():
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
-    m = re.match(r"(.*)/Cellar/mnrh/[^/]+/(.*)", root)
+    m = re.match(r"(.*)/Cellar/claudemeister/[^/]+/(.*)", root)
     if m:
-        root = f"{m.group(1)}/opt/mnrh/{m.group(2)}"
-    return os.path.join(root, "share", "mnrh", "restart.zsh")
+        root = f"{m.group(1)}/opt/claudemeister/{m.group(2)}"
+    return os.path.join(root, "share", "claudemeister", "restart.zsh")
 
 
 def zshrc_lines():
@@ -931,13 +939,14 @@ def write_zshrc(lines):
         f.writelines(lines)
 
 
-HOOKS = [("SessionStart", "claude notice", False, None), ("SessionEnd", "claude session-end", False, None),
-         ("UserPromptSubmit", "claude notify-hook", True, None), ("Stop", "claude notify-hook", True, None),
-         ("Notification", "claude notify-hook", True, None),
-         ("PreToolUse", "claude guard-hook", False, "Bash|Read|Edit|Write|MultiEdit|NotebookEdit"),
-         ("SessionStart", "claude humanize-hook", False, None), ("UserPromptSubmit", "claude humanize-hook", False, None),
-         ("Stop", "claude humanize-hook", True, None)]
-STATUS_CMD = "claude statusline"
+# (событие, команда claudemeister, async, matcher). Старые хуки mnrh claude <команда> setup заменяет этими.
+HOOKS = [("SessionStart", "notice", False, None), ("SessionEnd", "session-end", False, None),
+         ("UserPromptSubmit", "notify-hook", True, None), ("Stop", "notify-hook", True, None),
+         ("Notification", "notify-hook", True, None),
+         ("PreToolUse", "guard-hook", False, "Bash|Read|Edit|Write|MultiEdit|NotebookEdit"),
+         ("SessionStart", "humanize-hook", False, None), ("UserPromptSubmit", "humanize-hook", False, None),
+         ("Stop", "humanize-hook", True, None)]
+STATUS_CMD = "statusline"
 
 
 def notice_hook(install):
@@ -952,9 +961,9 @@ def notice_hook(install):
     hooks = settings.setdefault("hooks", {})
     for event, cmd, run_async, matcher in HOOKS:
         entries = [e for e in hooks.get(event, [])
-                   if not any(cmd in h.get("command", "") for h in e.get("hooks", []))]
+                   if not any(is_hook(h.get("command", ""), cmd) for h in e.get("hooks", []))]
         if install:
-            hook = {"type": "command", "command": f"{shlex.quote(MNRH)} {cmd}", "timeout": 10}
+            hook = {"type": "command", "command": hook_command(cmd), "timeout": 10}
             if run_async:
                 hook["async"] = True
             entries.append(dict({"matcher": matcher} if matcher else {}, hooks=[hook]))
@@ -966,9 +975,9 @@ def notice_hook(install):
         settings.pop("hooks")
     line = settings.get("statusLine")
     command = str(line.get("command", "")) if isinstance(line, dict) else ""
-    ours = STATUS_CMD in command or "promptsill" in command
+    ours = is_hook(command, STATUS_CMD) or "promptsill" in command
     promptsill = promptsill_path()
-    if install and promptsill and (not line or STATUS_CMD in command):
+    if install and promptsill and (not line or is_hook(command, STATUS_CMD)):
         settings["statusLine"] = {"type": "command", "command": shlex.quote(promptsill),
                                   "padding": 0, "refreshInterval": 10}
     elif not install and ours:
@@ -977,10 +986,13 @@ def notice_hook(install):
                    "✓ строка состояния: promptsill уже стоит в statusLine" if "promptsill" in command else
                    "✓ строка состояния → statusLine (promptsill)" if promptsill else
                    f"! строка состояния теперь отдельная программа promptsill: {PROMPTSILL_HINT}, "
-                   f"потом снова mnrh claude setup")
-    allow_rules = [f"mcp__mnrh__{name}" for name in READ_ONLY]
+                   f"потом снова claudemeister setup")
+    allow_rules = [f"mcp__{MCP_NAME}__{name}" for name in READ_ONLY]
+    # разрешения старого MCP-сервера mnrh тоже убираем: инструменты теперь у claudemeister
+    old_rules = {f"mcp__{OLD_MCP_NAME}__{name}" for name in READ_ONLY + ["mac_status", "free_memory"]}
     perms = settings.setdefault("permissions", {})
-    allow = [r for r in perms.get("allow", []) if r not in allow_rules] + (allow_rules if install else [])
+    allow = [r for r in perms.get("allow", []) if r not in allow_rules and r not in old_rules] + \
+        (allow_rules if install else [])
     if allow:
         perms["allow"] = allow
     else:
@@ -996,18 +1008,18 @@ def notice_hook(install):
         print(f"✓ сообщения после /restart и /forget, удаление пустых сессий → хуки SessionStart и SessionEnd "
               f"в {tilde(SETTINGS)}")
         print(status_note)
-        print("✓ защита секретов: вопрос перед чтением и удалением ключей → хук PreToolUse (mnrh claude guard)")
+        print("✓ защита секретов: вопрос перед чтением и удалением ключей → хук PreToolUse (claudemeister guard)")
         print("✓ уведомления, когда Claude ждёт тебя → хуки UserPromptSubmit, Stop и Notification "
-              "(mnrh claude notify -h)")
-        print("✓ mnrh humanization: правила письма без признаков нейросети → хуки SessionStart, UserPromptSubmit "
-              "и Stop; включить: /humanize или mnrh claude humanize on")
+              "(claudemeister notify -h)")
+        print("✓ claudemeister humanization: правила письма без признаков нейросети → хуки SessionStart, UserPromptSubmit "
+              "и Stop; включить: /humanize или claudemeister humanize on")
         print(f"✓ без вопроса о разрешении: {', '.join(READ_ONLY)} (они только читают)")
 
 
-SETUP_USAGE = """mnrh claude setup [--country KZ] [--only <имя>]
-    поставить команды /restart, /forget и другие, хуки Claude Code, хук zsh, MCP-сервер mnrh
-    и настроить прокси через VPS, если он еще не настроен. --country и --only уходят в mnrh claude proxy setup
-mnrh claude setup --remove    убрать все это (прокси остается, его убирает mnrh claude proxy remove)"""
+SETUP_USAGE = """claudemeister setup [--country KZ] [--only <имя>]
+    поставить команды /restart, /forget и другие, хуки Claude Code, хук zsh, MCP-сервер claudemeister
+    и настроить прокси через VPS, если он еще не настроен. --country и --only уходят в claudemeister proxy setup
+claudemeister setup --remove    убрать все это (прокси остается, его убирает claudemeister proxy remove)"""
 
 
 def setup_args(args):
@@ -1019,21 +1031,39 @@ def setup_args(args):
         elif a in ("--country", "--only"):
             value = next(it, "").strip()
             if not value or value.startswith("-"):
-                print(f"mnrh claude setup: после {a} нужно значение\n\n{SETUP_USAGE}", file=sys.stderr)
+                print(f"claudemeister setup: после {a} нужно значение\n\n{SETUP_USAGE}", file=sys.stderr)
                 return None
             opts[a[2:]] = value
         else:
-            print(f"mnrh claude setup: не знаю {a}\n\n{SETUP_USAGE}", file=sys.stderr)
+            print(f"claudemeister setup: не знаю {a}\n\n{SETUP_USAGE}", file=sys.stderr)
             return None
     if opts["country"] and not re.match(r"^[A-Za-z]{2}$", opts["country"]):
-        print("mnrh claude setup: --country ждет код страны из двух букв, например KZ", file=sys.stderr)
+        print("claudemeister setup: --country ждет код страны из двух букв, например KZ", file=sys.stderr)
         return None
     return opts
 
 
+def mcp_get(name):
+    """(подключен ли MCP-сервер name, [команда, аргументы...]) по выводу claude mcp get."""
+    r = subprocess.run(["claude", "mcp", "get", name], capture_output=True, text=True)
+    if r.returncode != 0:
+        return False, []
+    command = re.search(r"^\s*Command:\s*(.+?)\s*$", r.stdout, re.M)
+    args = re.search(r"^\s*Args:\s*(.*?)\s*$", r.stdout, re.M)
+    return True, ([command.group(1)] if command else []) + (args.group(1).split() if args else [])
+
+
+def remove_old_mcp():
+    """Убрать MCP-сервер mnrh, если это наш старый mnrh claude mcp. Чужой сервер с тем же именем не трогает."""
+    listed, registered = mcp_get(OLD_MCP_NAME)
+    if not listed or registered[1:] != ["claude", "mcp"] or os.path.basename(registered[0]) != "mnrh":
+        return False
+    subprocess.run(["claude", "mcp", "remove", "--scope", "user", OLD_MCP_NAME], capture_output=True)
+    return True
+
+
 def setup(args):
     import claude_setup
-    marker = "share/mnrh/restart.zsh"
     if any(a in ("-h", "--help", "help") for a in args):
         print(SETUP_USAGE)
         return 0
@@ -1045,14 +1075,16 @@ def setup(args):
                 [os.path.join(COMMANDS, f"{n}.md") for n in EXTRA_COMMANDS]:
             if os.path.exists(f):
                 os.remove(f)
-        subprocess.run(["claude", "mcp", "remove", "--scope", "user", "mnrh"], capture_output=True)
+        subprocess.run(["claude", "mcp", "remove", "--scope", "user", MCP_NAME], capture_output=True)
+        remove_old_mcp()
         notice_hook(False)
         lines = zshrc_lines()
-        kept = [l for l in lines if marker not in l]
+        kept = [l for l in lines if not is_zsh_hook(l)]
         if kept != lines:
             write_zshrc(kept)
-        print(f"Убрал /restart, /forget, /fresh, /slim, /todo, /where, /release-notes, /parallel, /shot, /ask, /humanize, MCP-сервер mnrh и хук из {tilde(ZSHRC)}.")
-        # mnrh claude больше не предлагает setup при запуске; вернуть все: mnrh claude setup
+        print("Убрал /restart, /forget, /fresh, /slim, /todo, /where, /release-notes, /parallel, /shot, /ask, "
+              f"/humanize, MCP-сервер {MCP_NAME} и хук из {tilde(ZSHRC)}.")
+        # claudemeister больше не предлагает setup при запуске; вернуть все: claudemeister setup
         claude_setup.write(set(), set(claude_setup.IDS))
         return 0
     os.makedirs(os.path.dirname(COMMAND_FILE), exist_ok=True)
@@ -1065,6 +1097,8 @@ def setup(args):
             f.write(text)
         print(f"✓ /{os.path.basename(path)[:-3]} → {tilde(path)}")
 
+    # до хуков: если promptsill поставится сейчас, notice_hook сразу пропишет его в statusLine
+    promptsill = claude_setup.promptsill_step()
     notice_hook(True)
     hook = hook_file()
     line = f'[ -f "{hook}" ] && source "{hook}"\n'
@@ -1072,36 +1106,37 @@ def setup(args):
     if line in lines:
         print(f"✓ хук перезапуска уже в {tilde(ZSHRC)}")
     else:
-        lines = [l for l in lines if marker not in l]
+        lines = [l for l in lines if not is_zsh_hook(l)]
         if lines and not lines[-1].endswith("\n"):
             lines[-1] += "\n"
         write_zshrc(lines + [line])
         print(f"✓ хук перезапуска → {tilde(ZSHRC)} (работает в новых вкладках терминала)")
 
-    listed = subprocess.run(["claude", "mcp", "get", "mnrh"], capture_output=True, text=True)
-    registered = re.search(r"^\s*Command:\s*(.+?)\s*$", listed.stdout, re.M)
-    if listed.returncode == 0 and registered and registered.group(1) != MNRH:
-        subprocess.run(["claude", "mcp", "remove", "--scope", "user", "mnrh"], capture_output=True)
-        print(f"✓ MCP-сервер mnrh был подключён к {tilde(registered.group(1))}, переключаю на {tilde(MNRH)}")
-        listed = subprocess.CompletedProcess(listed.args, 1)
-    if listed.returncode == 0:
-        print("✓ MCP-сервер mnrh уже подключён")
+    if remove_old_mcp():
+        print(f"✓ MCP-сервер {OLD_MCP_NAME} (mnrh claude mcp) убран, его инструменты теперь у {MCP_NAME}")
+    listed, registered = mcp_get(MCP_NAME)
+    if listed and registered != [CM, "mcp"]:
+        subprocess.run(["claude", "mcp", "remove", "--scope", "user", MCP_NAME], capture_output=True)
+        print(f"✓ MCP-сервер {MCP_NAME} был подключён к {' '.join(registered) or '?'}, переключаю на {tilde(CM)} mcp")
+        listed = False
+    if listed:
+        print(f"✓ MCP-сервер {MCP_NAME} уже подключён")
     else:
-        r = subprocess.run(["claude", "mcp", "add", "--scope", "user", "mnrh", "--", MNRH, "claude", "mcp"],
+        r = subprocess.run(["claude", "mcp", "add", "--scope", "user", MCP_NAME, "--", CM, "mcp"],
                            capture_output=True, text=True)
         if r.returncode != 0:
             print(f"✗ не подключил MCP: {r.stderr.strip() or r.stdout.strip()}")
             return 1
-        print(f"✓ MCP-сервер mnrh: {tilde(MNRH)} claude mcp (инструменты: {', '.join(t['name'] for t in tools())})")
+        print(f"✓ MCP-сервер {MCP_NAME}: {tilde(CM)} mcp (инструменты: {', '.join(t['name'] for t in tools())})")
     import claude_notify
     if claude_notify.ensure_app():
-        print(f"✓ приложение уведомлений → {tilde(claude_notify.AGENT.app)}; проверить: mnrh claude notify test")
+        print(f"✓ приложение уведомлений → {tilde(claude_notify.AGENT.app)}; проверить: claudemeister notify test")
     else:
         print("✗ не собрал приложение уведомлений: нужен swiftc (xcode-select --install)")
-    done = set(claude_setup.AUTO)
     proxy = claude_setup.proxy_step(opts["country"], opts["only"])
-    claude_setup.record(done | ({"proxy"} if proxy == "done" else set()),
-                        {"proxy"} if proxy == "skipped" else set())
+    asked = {"proxy": proxy, "promptsill": promptsill}
+    claude_setup.record(set(claude_setup.AUTO) | {s for s, r in asked.items() if r == "done"},
+                        {s for s, r in asked.items() if r == "skipped"})
     print("Подхватится в новых вкладках и сессиях Claude Code; в уже открытых — после перезапуска.")
     return 0
 

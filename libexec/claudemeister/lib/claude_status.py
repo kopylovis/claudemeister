@@ -10,6 +10,6 @@ if path:
 if not sys.stdin.isatty():
     print(f"строка состояния теперь отдельная программа promptsill: {PROMPTSILL_HINT}")
     sys.exit(0)
-print("Строка состояния Claude Code теперь отдельная программа promptsill, mnrh claude statusline передаёт ей команды.")
-print(f"Поставить: {PROMPTSILL_HINT}, потом mnrh claude setup. Подробнее: https://github.com/kopylovis/promptsill")
+print("Строка состояния Claude Code теперь отдельная программа promptsill, claudemeister statusline передаёт ей команды.")
+print(f"Поставить: {PROMPTSILL_HINT}, потом claudemeister setup. Подробнее: https://github.com/kopylovis/promptsill")
 sys.exit(0 if any(a in ("-h", "--help") for a in sys.argv[1:]) else 1)

@@ -128,16 +128,16 @@ def build(cwd, exclude=None):
 
 def context_for_model(cwd, exclude=None):
     text, short = build(cwd, exclude)
-    head = ("mnrh: справка о проекте на старте сессии. Это фон: не пересказывай её без запроса, но используй, "
+    head = ("claudemeister: справка о проекте на старте сессии. Это фон: не пересказывай её без запроса, но используй, "
             "когда пользователь спрашивает, где остановились, что дальше или ссылается на прошлую работу.\n\n")
-    user = ("mnrh: " + " · ".join(short) + " · /where — подробнее") if short else ""
+    user = ("claudemeister: " + " · ".join(short) + " · /where — подробнее") if short else ""
     return head + text, user
 
 
 def cli(args):
     if args[:1] in (["-h"], ["--help"]):
-        print("mnrh claude brief          где мы остановились: git, прошлая сессия в этом проекте, бэклог")
-        print("mnrh claude brief on|off   показывать ли эту справку Claude при старте новой сессии")
+        print("claudemeister brief         где мы остановились: git, прошлая сессия в этом проекте, бэклог")
+        print("claudemeister brief on|off  показывать ли эту справку Claude при старте новой сессии")
         print()
         print("В Claude Code: /where. При старте новой сессии хук SessionStart передаёт справку Claude")
         print("как фон, а тебе показывает одну строку.")

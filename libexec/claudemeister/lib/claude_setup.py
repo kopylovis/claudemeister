@@ -1,18 +1,19 @@
-"""Шаги mnrh claude setup и проверка перед запуском mnrh claude.
+"""Шаги claudemeister setup и проверка перед запуском claudemeister.
 
 setup записывает в ~/.config/mnrh/claude-setup.json, какие шаги сделаны и от каких отказались.
-mnrh claude перед запуском сверяет запись со STEPS. Если setup на этом Mac не запускали или после
+claudemeister перед запуском сверяет запись со STEPS. Если setup на этом Mac не запускали или после
 обновления в STEPS появился шаг, которого нет в записи, предлагает настроить.
 Новый шаг в setup: добавь его id и описание в STEPS, и при первом запуске после обновления его предложат.
 Шаг с вопросом еще и в ASKS, а setup записывает его результат сам, как proxy_step.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, OK, WARN, tilde  # noqa: E402
+from mnrhlib import HOME, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
 
 STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "mnrh", "claude-setup.json")
 CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
@@ -20,17 +21,20 @@ STEPS = [
     ("commands", "команды /restart, /forget, /fresh, /slim, /todo и другие"),
     ("hooks", "хуки Claude Code: сообщения после /restart, guard, уведомления, humanization, строка состояния"),
     ("zsh", "хук перезапуска в ~/.zshrc"),
-    ("mcp", "MCP-сервер mnrh"),
+    ("mcp", "MCP-сервер claudemeister"),
     ("notify-app", "приложение уведомлений"),
-    ("proxy", "прокси через VPS для mnrh claude -x"),
+    ("proxy", "прокси через VPS для claudemeister -x"),
+    ("promptsill", "строка состояния promptsill: лимиты, контекст, порты, память"),
 ]
 IDS = [s for s, _ in STEPS]
 # Шаги с вопросами, у каждого своя функция. Остальные setup делает сам и отмечает сделанными все разом.
-ASKS = {"proxy"}
+ASKS = {"proxy", "promptsill"}
 AUTO = set(IDS) - ASKS
 # Эти шаги setup делал и до того, как начал вести запись. Если записи нет, а /restart стоит, они сделаны.
 BEFORE_STATE = {"commands", "hooks", "zsh", "mcp", "notify-app"}
 YES = ("", "y", "yes", "д", "да")
+# Шаги, которые ставил mnrh claude setup. Пока команды, хуки или MCP вызывают mnrh claude, их надо переписать.
+LEGACY = ["commands", "hooks", "mcp"]
 
 
 def read():
@@ -71,6 +75,26 @@ def proxy_configured():
     return claude_proxy.configured()
 
 
+def legacy():
+    """True, если /restart, хуки или MCP-сервер еще из mnrh: вызывают mnrh claude, а не claudemeister."""
+    def text(path):
+        try:
+            with open(path) as f:
+                return f.read()
+        except OSError:
+            return ""
+    if "mnrh claude" in text(os.path.join(CLAUDE, "commands", "restart.md")):
+        return True
+    if "mnrh claude " in text(os.path.join(CLAUDE, "settings.json")):
+        return True
+    try:
+        servers = json.loads(text(os.path.join(HOME, ".claude.json")) or "{}").get("mcpServers") or {}
+    except (ValueError, AttributeError):
+        return False
+    old = servers.get("mnrh") if isinstance(servers, dict) else None
+    return isinstance(old, dict) and old.get("args") == ["claude", "mcp"]
+
+
 def pending():
     """(шаги, которых нет ни в сделанных, ни в отказах; True, если setup на этом Mac не запускали)."""
     if read() is None and not os.path.exists(os.path.join(CLAUDE, "commands", "restart.md")):
@@ -78,6 +102,10 @@ def pending():
     done, skipped = current()
     if "proxy" not in done and proxy_configured():
         done = done | {"proxy"}
+    if "promptsill" not in done and promptsill_path():
+        done = done | {"promptsill"}
+    if legacy():
+        done = done - set(LEGACY)
     return [s for s in IDS if s not in done and s not in skipped], False
 
 
@@ -103,17 +131,17 @@ def proxy_step(country="", only=""):
     if claude_proxy.configured():
         want = claude_proxy.setting("country")
         print(f"{OK} прокси через VPS уже настроен" + (f", выход должен быть в {want}" if want else "")
-              + " (проверить: mnrh claude proxy test)")
+              + " (проверить: claudemeister proxy test)")
         if country and country.upper() != want.upper():
             print(f"{WARN} --country {country.upper()} не применил, прокси уже настроен. "
-                  f"Поменять: mnrh claude proxy setup --country {country.upper()}")
+                  f"Поменять: claudemeister proxy setup --country {country.upper()}")
         return "done"
     if not sys.stdin.isatty():
-        print(f"{WARN} прокси через VPS не настроен, не терминал. Настроить: mnrh claude proxy setup --country KZ")
+        print(f"{WARN} прокси через VPS не настроен, не терминал. Настроить: claudemeister proxy setup --country KZ")
         return None
-    print("Прокси через VPS: сессии mnrh claude -x ходят через твой сервер (подписка 3x-ui), остальное напрямую.")
+    print("Прокси через VPS: сессии claudemeister -x ходят через твой сервер (подписка 3x-ui), остальное напрямую.")
     if ask("Настроить прокси сейчас?", [("yes", "Да", "yд"), ("no", "Пропустить", "nн")]) != "yes":
-        print(f"{WARN} прокси пропущен. Настроить потом: mnrh claude proxy setup")
+        print(f"{WARN} прокси пропущен. Настроить потом: claudemeister proxy setup")
         return "skipped"
     if not country:
         country = input("Страна выхода, которую проверять при запуске, например KZ (Enter, не проверять): ").strip()
@@ -121,8 +149,33 @@ def proxy_step(country="", only=""):
     return "done" if claude_proxy.configured() else None
 
 
+def promptsill_step():
+    """Шаг setup про promptsill. Возвращает "done", "skipped" или None (не поставлен и не спрашивали)."""
+    if promptsill_path():
+        print(f"{OK} строка состояния promptsill уже стоит")
+        return "done"
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print(f"{WARN} строки состояния promptsill нет, не терминал. Поставить: {PROMPTSILL_HINT}")
+        return None
+    print("promptsill: строка состояния Claude Code с темпом лимитов, контекстом, dev-серверами, портами и памятью.")
+    if ask("Поставить promptsill?", [("yes", "Да", "yд"), ("no", "Пропустить", "nн")]) != "yes":
+        print(f"{WARN} promptsill пропущен. Поставить потом: {PROMPTSILL_HINT}, затем claudemeister setup")
+        return "skipped"
+    brew = shutil.which("brew") or next((p for p in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew")
+                                         if os.access(p, os.X_OK)), None)
+    if not brew:
+        print(f"{WARN} нет Homebrew. Поставь его с https://brew.sh, потом {PROMPTSILL_HINT}")
+        return None
+    r = subprocess.run([brew, "install", "kopylovis/tap/promptsill"])
+    if r.returncode != 0 or not promptsill_path():
+        print(f"{WARN} promptsill не поставился. Попробуй сам: {PROMPTSILL_HINT}")
+        return None
+    print(f"{OK} promptsill поставлен")
+    return "done"
+
+
 def check():
-    """Перед запуском mnrh claude: предложить setup, если его не делали или появились новые шаги."""
+    """Перед запуском claudemeister: предложить setup, если его не делали или появились новые шаги."""
     if os.environ.get("MNRH_NO_SETUP_CHECK") or not (sys.stdin.isatty() and sys.stdout.isatty()):
         return 0
     steps, fresh = pending()
@@ -130,9 +183,12 @@ def check():
         return 0
     about = dict(STEPS)
     if fresh:
-        print("mnrh claude setup на этом Mac еще не запускали. Он ставит:")
+        print("claudemeister setup на этом Mac еще не запускали. Он ставит:")
+    elif legacy():
+        print("Команды, хуки и MCP-сервер Claude Code еще вызывают mnrh claude. Теперь это отдельная программа "
+              "claudemeister, setup перепишет их на нее:")
     else:
-        print("После обновления в mnrh claude setup есть шаги, которые здесь не настроены:")
+        print("После обновления в claudemeister setup есть шаги, которые здесь не настроены:")
     for s in steps:
         print(f"  {about[s]}")
     answer = ask("Настроить сейчас?", [("yes", "Да", "yд"), ("later", "Позже", "lп"), ("never", "Не предлагать", "nн")],
@@ -140,11 +196,12 @@ def check():
     print()
     if answer == "never":
         record(skipped=steps)
-        print("Больше не спрошу. Настроить можно в любой момент: mnrh claude setup\n")
-    elif answer == "yes" and steps == ["proxy"]:
-        result = proxy_step()
-        if result:
-            record(**{"done" if result == "done" else "skipped": ["proxy"]})
+        print("Больше не спрошу. Настроить можно в любой момент: claudemeister setup\n")
+    elif answer == "yes" and set(steps) <= ASKS:
+        for step in steps:
+            result = proxy_step() if step == "proxy" else promptsill_step()
+            if result:
+                record(**{"done" if result == "done" else "skipped": [step]})
         print()
     elif answer == "yes":
         subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "claude_restart.py"),

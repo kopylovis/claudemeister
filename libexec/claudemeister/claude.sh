@@ -16,36 +16,40 @@ MENU="$LIB/menu.py"
 
 help() {
   cat <<'EOF'
-mnrh claude                 меню с действиями
-mnrh claude open            выбрать проект в папке проектов (mnrh init) и запустить в нём Claude Code
-mnrh claude root            запустить в домашнем каталоге
-mnrh claude <имя>           сразу в проекте (достаточно начала имени) или в папке по пути
-mnrh claude ... -n          обычная сессия без вопроса
-mnrh claude ... -k          caffeinate без вопроса
-mnrh claude ... -x          через свой VPS: только эта сессия, остальные программы напрямую (mnrh claude proxy)
-mnrh claude ... -d          напрямую, без вопроса про VPS
-mnrh claude ... --new       новая сессия, не предлагать продолжить сохранённые
-mnrh claude ... -- <аргументы claude>   например: mnrh claude kcalm -- --continue
-mnrh claude sessions        сохранённые сессии: размер, продолжить, перенести в другую папку, удалить
-                            (подробнее: mnrh claude sessions -h)
-mnrh claude restart         изнутри Claude: закрыть и открыть эту же сессию заново, с claude update
-mnrh claude forget          изнутри Claude: удалить эту сессию без следа и открыть чистую в той же папке
-mnrh claude fresh           изнутри Claude: новая сессия без названия, эта остаётся в /resume (/fresh)
-mnrh claude slim            изнутри Claude: сжать эту сессию (старые скриншоты, длинные выводы) и открыть снова
-mnrh claude brief           где мы остановились: git, прошлая сессия, бэклог (/where)
-mnrh claude parallel "<…>"  задача в отдельной ветке и worktree, во втором окне Claude (/parallel)
-mnrh claude ask <пр> <…>    спросить отдельный Claude про другой проект, только чтение (/ask)
-mnrh claude release-notes   материал для «Что нового» к релизу (/release-notes)
-mnrh claude proxy           прокси через VPS для отдельных сессий: setup, test, remove (подробнее: proxy -h)
-mnrh claude guard           защита секретов: спросит перед чтением или удалением ключей (on, off, test)
-mnrh claude humanize        писать без признаков нейросети: on, off, check <файл>, rules (/humanize)
-mnrh claude notify          уведомления, когда Claude ждёт тебя (on, off, after <сек>, test, telegram)
-mnrh claude setup           поставить /restart, хуки, MCP-сервер mnrh, хук zsh и прокси через VPS
-                            (--country KZ для прокси, --remove убрать; подробнее: setup -h)
+claudemeister                       выбрать проект и сессию и запустить Claude Code
+claudemeister open                  выбрать проект в папке проектов и запустить в нём Claude Code
+claudemeister root                  запустить в домашнем каталоге
+claudemeister <имя>                 сразу в проекте (достаточно начала имени) или в папке по пути
+claudemeister ... -n                обычная сессия без вопроса
+claudemeister ... -k                caffeinate без вопроса
+claudemeister ... -x                через свой VPS: только эта сессия, остальные программы напрямую
+claudemeister ... -d                напрямую, без вопроса про VPS
+claudemeister ... --new             новая сессия, не предлагать продолжить сохранённые
+claudemeister ... -- <аргументы>    аргументы для claude, например: claudemeister kcalm -- --continue
+claudemeister sessions              сохранённые сессии: размер, продолжить, перенести, удалить (sessions -h)
+claudemeister restart               изнутри Claude: закрыть и открыть эту же сессию заново, с claude update
+claudemeister forget                изнутри Claude: удалить эту сессию без следа и открыть чистую
+claudemeister fresh                 изнутри Claude: новая сессия без названия, эта остаётся в /resume (/fresh)
+claudemeister slim                  изнутри Claude: сжать эту сессию и открыть снова
+claudemeister brief                 где мы остановились: git, прошлая сессия, бэклог (/where)
+claudemeister parallel "<…>"        задача в отдельной ветке и worktree, во втором окне Claude (/parallel)
+claudemeister ask <пр> <…>          спросить отдельный Claude про другой проект, только чтение (/ask)
+claudemeister release-notes         материал для «Что нового» к релизу (/release-notes)
+claudemeister todo                  бэклог проекта между сессиями (/todo; подробнее: todo -h)
+claudemeister shot                  снимок окна приложения (/shot)
+claudemeister deps                  устаревшие зависимости Gradle в gradle/libs.versions.toml
+claudemeister proxy                 прокси через VPS для отдельных сессий: setup, test, remove (proxy -h)
+claudemeister guard                 защита секретов: спросит перед чтением или удалением ключей
+claudemeister humanize              писать без признаков нейросети: on, off, check <файл>, rules (/humanize)
+claudemeister notify                уведомления, когда Claude ждёт тебя (on, off, after <сек>, test, telegram)
+claudemeister setup                 поставить /restart, хуки, MCP-сервер, хук zsh, прокси и promptsill
+                                    (--country KZ для прокси, --remove убрать; подробнее: setup -h)
+claudemeister --version             версия
 
 caffeinate (по умолчанию) не даёт Mac уснуть, пока идёт сессия:
 удобно для долгих задач и Remote Control с телефона. Экран при этом гаснуть может.
-С закрытой крышкой на батарее Mac всё равно уснёт, пока не сделан mnrh sleep lid setup.
+С закрытой крышкой на батарее Mac всё равно уснёт. Не уснёт, если стоит mnrh и сделан mnrh sleep lid setup.
+Папка проектов: ~/Developer, строка projects=<путь> в ~/.config/mnrh/config или MNRH_PROJECTS=<путь>.
 EOF
 }
 
@@ -74,14 +78,14 @@ while [ $# -gt 0 ]; do
     -d|--direct) net=direct ;;
     --new) new=1 ;;
     --) shift; passthrough=("$@"); break ;;
-    -*) echo "mnrh claude: неизвестный флаг $1" >&2; exit 2 ;;
-    *) [ -z "$target" ] && target="$1" || { echo "mnrh claude: лишний аргумент $1" >&2; exit 2; } ;;
+    -*) echo "claudemeister: неизвестный флаг $1" >&2; exit 2 ;;
+    *) [ -z "$target" ] && target="$1" || { echo "claudemeister: лишний аргумент $1" >&2; exit 2; } ;;
   esac
   shift
 done
 
 if [ ! -t 0 ] || [ ! -t 1 ]; then
-  echo "mnrh claude: нужен терминал — Claude Code интерактивный." >&2
+  echo "claudemeister: нужен терминал — Claude Code интерактивный." >&2
   exit 2
 fi
 
@@ -89,8 +93,9 @@ fi
 /usr/bin/python3 "$LIB/claude_setup.py" check
 
 DEV=$(projects_dir)
-if [ ! -f "$CONF" ] && [ -z "${MNRH_PROJECTS:-}" ] && [ ! -d "$DEV" ]; then
-  /usr/bin/python3 "$(dirname "$LIB")/init.py" --projects-only || exit 1
+# папку проектов спрашивает mnrh init, если стоит полный mnrh; без него остаются ~ и пути
+if [ ! -f "$CONF" ] && [ -z "${MNRH_PROJECTS:-}" ] && [ ! -d "$DEV" ] && command -v mnrh >/dev/null; then
+  mnrh init --projects-only || exit 1
   DEV=$(projects_dir)
 fi
 
@@ -109,9 +114,9 @@ match() {
   done
   if [ "${#found[@]}" -eq 1 ]; then echo "${found[0]}"; return 0; fi
   if [ "${#found[@]}" -gt 1 ]; then
-    echo "mnrh claude: «${q}» подходит к нескольким: $(for f in "${found[@]}"; do printf '%s ' "$(basename "$f")"; done)" >&2
+    echo "claudemeister: «${q}» подходит к нескольким: $(for f in "${found[@]}"; do printf '%s ' "$(basename "$f")"; done)" >&2
   else
-    echo "mnrh claude: проекта «${q}» нет в ${DEV/#$HOME/~}" >&2
+    echo "claudemeister: проекта «${q}» нет в ${DEV/#$HOME/~}" >&2
   fi
   return 1
 }
@@ -172,16 +177,18 @@ if [ -z "$net" ]; then
 fi
 pre=()
 if [ "$net" = vps ]; then
-  /usr/bin/python3 "$PROXY" configured || { echo "mnrh claude: прокси не настроен или нет mihomo: mnrh claude proxy setup" >&2; exit 1; }
+  /usr/bin/python3 "$PROXY" configured || { echo "claudemeister: прокси не настроен или нет mihomo: claudemeister proxy setup" >&2; exit 1; }
   pre=(/usr/bin/python3 "$PROXY" run --)
 fi
 
 cd "$dir" || exit 1
 echo "-> ${dir/#$HOME/~} · $mode$([ "$net" = vps ] && echo ' · через VPS')"
-[ "$mode" = caffeinate ] && [ ! -f /etc/sudoers.d/mnrh-pmset ] &&
+# сон с закрытой крышкой выключает mnrh sleep lid, он есть только в полном mnrh
+MNRH=$(command -v mnrh)
+[ "$mode" = caffeinate ] && [ -n "$MNRH" ] && [ ! -f /etc/sudoers.d/mnrh-pmset ] &&
   printf '\033[2m   закрытая крышка на батарее всё равно усыпит Mac: mnrh sleep lid setup\033[0m\n'
 if [ "$mode" = caffeinate ]; then
-  /usr/bin/python3 "$LIB/lid.py" keep >/dev/null 2>&1 || true
+  [ -n "$MNRH" ] && "$MNRH" sleep lid keep >/dev/null 2>&1
   exec ${pre[@]+"${pre[@]}"} caffeinate -is "$CLAUDE_BIN" "${passthrough[@]+"${passthrough[@]}"}"
 else
   exec ${pre[@]+"${pre[@]}"} "$CLAUDE_BIN" "${passthrough[@]+"${passthrough[@]}"}"

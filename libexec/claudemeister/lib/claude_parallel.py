@@ -53,7 +53,7 @@ def copy_local(root, path):
 PERMISSION_MODES = ["default", "acceptEdits", "auto", "plan"]
 
 
-def start(task, project=None, branch=None, mode="caffeinate", cwd=None, mnrh=None, permission=None, rc=True):
+def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None, permission=None, rc=True):
     root, err = find_project(project, cwd)
     if err:
         return err, True
@@ -83,14 +83,14 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, mnrh=Non
     import claude_open
     flags = ["--permission-mode", permission] if permission in PERMISSION_MODES and permission != "default" else []
     text, bad = claude_open.open_claude({"path": path, "mode": mode, "prompt": prompt, "flags": flags,
-                                         "trust": claude_open.trusted(root), "remote_control": rc}, mnrh or "mnrh")
+                                         "trust": claude_open.trusted(root), "remote_control": rc}, cm or "claudemeister")
     lines = [f"Ветка {name} от {base}, worktree {tilde(path)}."]
     if copied:
         lines.append("Скопировал неотслеживаемые настройки: " + ", ".join(copied) + ".")
     if dirty:
         lines.append("В основной папке есть незакоммиченные изменения — в worktree их нет, он от последнего коммита.")
     lines.append(text)
-    lines.append(f"Потом: mnrh claude parallel merge {name} — влить, drop {name} — выбросить.")
+    lines.append(f"Потом: claudemeister parallel merge {name} — влить, drop {name} — выбросить.")
     return "\n".join(lines), bad
 
 
@@ -212,9 +212,9 @@ FINISH_TOOL = {
 TOOLS = [START_TOOL, LIST_TOOL, FINISH_TOOL]
 
 
-def handle(name, a, cwd=None, mnrh=None):
+def handle(name, a, cwd=None, cm=None):
     if name == "parallel_task":
-        return start(a.get("task"), a.get("project"), a.get("branch"), a.get("mode") or "caffeinate", cwd, mnrh,
+        return start(a.get("task"), a.get("project"), a.get("branch"), a.get("mode") or "caffeinate", cwd, cm,
                      a.get("permission_mode"), a.get("remote_control", True) is not False)
     if name == "parallel_list":
         return listing(a.get("project"), cwd)
@@ -224,11 +224,11 @@ def handle(name, a, cwd=None, mnrh=None):
 def main():
     args = sys.argv[2:] if sys.argv[1:2] == ["parallel"] else sys.argv[1:]
     if not args or args[0] in ("-h", "--help"):
-        print('mnrh claude parallel "<задача>" [-p проект] [-b ветка] [-n] [--permission-mode auto] [--no-rc]')
+        print('claudemeister parallel "<задача>" [-p проект] [-b ветка] [-n] [--permission-mode auto] [--no-rc]')
         print("                         новая ветка и worktree от текущего коммита, в новом окне — Claude с задачей")
-        print("mnrh claude parallel list              параллельные задачи этого проекта")
-        print("mnrh claude parallel merge <ветка>     влить в исходную ветку (без пуша) и убрать worktree")
-        print("mnrh claude parallel drop <ветка>      выбросить ветку и worktree")
+        print("claudemeister parallel list           параллельные задачи этого проекта")
+        print("claudemeister parallel merge <ветка>  влить в исходную ветку (без пуша) и убрать worktree")
+        print("claudemeister parallel drop <ветка>   выбросить ветку и worktree")
         print()
         print(f"Worktree лежат в {tilde(os.path.join(projects_dir(), '.worktrees'))}/<проект>/. В Claude Code: /parallel.")
         return 0 if args else 2
@@ -250,9 +250,9 @@ def main():
     elif rest[:1] in (["merge"], ["drop"]) and len(rest) == 2:
         text, bad = finish(rest[1], rest[0], opts.get("-p"))
     else:
-        from claude_restart import MNRH
+        from mnrhlib import CM
         text, bad = start(" ".join(rest), opts.get("-p"), opts.get("-b"), "normal" if opts.get("-n") else "caffeinate",
-                          mnrh=MNRH, permission=opts.get("--permission-mode"), rc=not opts.get("--no-rc"))
+                          cm=CM, permission=opts.get("--permission-mode"), rc=not opts.get("--no-rc"))
     print(text)
     return 1 if bad else 0
 
