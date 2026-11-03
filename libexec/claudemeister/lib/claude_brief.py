@@ -76,7 +76,10 @@ def last_session(root, cwd, exclude=None):
             path = os.path.join(pdir, f)
             if not f.endswith(".jsonl") or sid == exclude or not claude_search.UUID.match(sid) or os.path.islink(path):
                 continue
-            best.append((os.path.getmtime(path), sid, path))
+            try:
+                best.append((os.path.getmtime(path), sid, path))
+            except OSError:  # пустую сессию как раз удалила уборка при старте
+                continue
     for _, sid, path in sorted(best, reverse=True):
         if is_junk(path):
             continue
