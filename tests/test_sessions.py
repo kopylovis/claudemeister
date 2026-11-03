@@ -24,7 +24,7 @@ def in_sandbox(code):
 class Forget(unittest.TestCase):
     def test_forget_caches_removes_only_this_session(self):
         r, home = in_sandbox("""
-            import os, claude_sessions as s
+            import os, session_store as s
             sid, other = "11111111-2222-3333-4444-555555555555", "99999999-2222-3333-4444-555555555555"
             cache = os.path.join(os.environ["HOME"], ".cache", "mnrh")
             files = ["slim-backup/{}.20260101-000000.jsonl.gz", "notify/{}.json", "humanize/{}.hits",
@@ -48,7 +48,7 @@ class Forget(unittest.TestCase):
 class Offline(unittest.TestCase):
     def test_unplugged_drive_is_not_an_orphan(self):
         r, _ = in_sandbox("""
-            import claude_sessions as s
+            import session_store as s
             print(s.offline("/Volumes/NoSuchDrive-cm/proj", "-Volumes-NoSuchDrive-cm-proj"))
             print(s.offline(None, "-Volumes-NoSuchDrive-cm-proj"))
             print(s.offline("/Users/x/gone", "-Users-x-gone"))
@@ -129,7 +129,7 @@ def with_sessions(code):
 class Lookup(unittest.TestCase):
     def test_by_id_matches_load(self):
         r, _ = with_sessions("""
-            import claude_sessions as s
+            import session_store as s
             full = {x["id"]: x for x in s.load()}
             for sid in ids.values():
                 assert s.by_id(sid) == [full[sid]], sid

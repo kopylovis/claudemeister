@@ -71,7 +71,7 @@ def commits(root, since):
 
 
 def sessions_since(root, ts):
-    from claude_sessions import encode
+    from session_store import encode
     pdir = os.path.join(claude_search.PROJECTS, encode(root))
     out = []
     for path in glob.glob(os.path.join(glob.escape(pdir), "*.jsonl")):
