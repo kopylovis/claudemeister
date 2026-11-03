@@ -279,7 +279,7 @@ cached for 6 hours. Claude gets the same through the `deps_outdated` tool.
 | `/where` | where we left off: git, the last session in this project, backlog, what's next |
 | `/todo` | backlog: `/todo` lists, `/todo <text>` adds, `/todo done 2` marks done |
 | `/release-notes` | "What's new" in Russian and English for fastlane |
-| `/parallel <task>` | the same task in its own branch in a second window; `/parallel list` |
+| `/parallel <task>` | the same task in its own branch in a second window; `--fork` takes this conversation along; `/parallel list` |
 | `/shot <app> [question]` | screenshot of a window that Claude looks at and answers about |
 | `/ask <project> <question>` | an answer from another project by a separate Claude |
 
@@ -327,6 +327,13 @@ project has that file in its root, its patterns (`.gitignore` syntax) pick the f
 are copied, so tracked files are never duplicated. The same file then also works for `claude --worktree` and for
 subagent worktrees. A project without `.worktreeinclude` gets the old list: untracked `local.properties`, `.env*`
 and `fastlane/.env*`, and the reply says so.
+
+`/parallel --fork <task>` (`fork: true` in `parallel_task`, `--fork` on the command line from inside Claude) opens
+the second Claude with a copy of the current conversation, so it knows everything said so far:
+`claude --resume <id> --fork-session` started in the worktree. Claude Code finds a session by id in the
+project's git worktrees, and a fork starts in the folder it was launched from, so the copy works in the worktree
+while the original session stays as it was. Without `--fork` the second Claude starts a new session with only
+the task.
 
 claudemeister keeps creating the worktree itself instead of using `claude --worktree`: that flag puts worktrees
 in `<repo>/.claude/worktrees/` on a `worktree-<name>` branch from the default branch of the remote, while
@@ -531,6 +538,15 @@ Or to Tossling on your phone through your own ntfy: `claudemeister notify phone 
 Mac, `phone always` every time, `phone off` to turn it off, `phone test` for a test. They go to the `claude`
 channel, and questions and permission requests use high priority. On the phone, add the `claude` channel in
 Tossling's notification settings.
+
+With Remote Control, Claude Code pushes to the Claude app on your phone itself. If the session is connected
+(`/remote-control`, `--remote-control` or "Enable Remote Control for all sessions") and **Push when actions
+required** is on in `/config` (`inputNeededNotifEnabled`), claudemeister doesn't send permission requests and
+questions to Telegram or Tossling for that session, so they don't arrive twice; the Mac notification stays.
+claudemeister sees the connection through `CLAUDE_CODE_BRIDGE_SESSION_ID`, which Claude Code v2.1.199 and later
+sets in hook commands while Remote Control is connected. "Done" and "waiting for you" still go out as before:
+Claude sends its own push for those only when it decides to. If `/config` shows "No mobile registered",
+open the Claude app on the phone, or turn the toggle off to get these through claudemeister again.
 
 The claudemeister Notify icon is `share/claudemeister/icon.png`, 1024×1024 (a rounded copy for the README is in
 `docs/icon.png`). It fills the whole square with no transparency: macOS 26 rounds it itself and puts an icon with
