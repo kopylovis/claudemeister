@@ -14,6 +14,7 @@ uninstall:
 
 test:
 	@bash -n bin/claudemeister
+	@/usr/bin/python3 -m unittest discover -s tests -q 2>&1 | tail -1 | grep -qx OK || /usr/bin/python3 -m unittest discover -s tests
 	@bash -n libexec/claudemeister/claude.sh
 	@for f in libexec/claudemeister/*.py libexec/claudemeister/lib/*.py; do /usr/bin/python3 -m py_compile "$$f" || exit 1; done
 	@./bin/claudemeister --version | grep -qx "$$(cat VERSION)"
