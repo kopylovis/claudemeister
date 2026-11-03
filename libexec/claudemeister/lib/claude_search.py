@@ -12,15 +12,21 @@ from mnrhlib import CLAUDE_HOME, HOME, UUID_RE, tilde, write_json
 CLAUDE = CLAUDE_HOME
 PROJECTS = os.path.join(CLAUDE, "projects")
 INDEX = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "mnrh", "sessions-index")
-VERSION = 2
+VERSION = 3
 # основы слов лежат рядом в <id>.terms.json: хукам нужен только текст, а основы досчитываются при поиске
 TERMS_VERSION = 1
 UUID = UUID_RE
 REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 LOCAL = ("<command-name>", "<local-command-stdout>", "<local-command-stderr>", "<local-command-caveat>",
          "<task-notification>")
-ROLES = {"user": "ты", "claude": "claude", "tool": "команда", "summary": "сводка"}
+ROLES = {"user": "ты", "claude": "claude", "tool": "команда", "error": "ошибка", "summary": "сводка"}
 TOOL_CAP = 400
+# ошибки инструментов индексируются, обычный вывод нет; у длинной ошибки берутся начало и конец, где обычно причина
+ERROR_HEAD, ERROR_TAIL = 600, 900
+# ошибки самого Claude Code, а не команды: отказ в разрешении, «сначала прочитай файл» и т. п.
+ERROR_NOISE = ("Permission for this action was denied", "The user doesn't want to proceed",
+               "File has not been read yet", "File has been modified since", "Blocked: sleep",
+               "[Request interrupted")
 READ_BUDGET = 40000
 
 
@@ -61,6 +67,20 @@ def tool_line(block):
     return text[:TOOL_CAP]
 
 
+def error_text(block):
+    c = block.get("content")
+    if isinstance(c, list):
+        c = "\n".join(b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") == "text")
+    if not isinstance(c, str):
+        return ""
+    c = c.replace("<tool_use_error>", "").replace("</tool_use_error>", "").strip()
+    if not c or any(c.startswith(n) or n in c[:120] for n in ERROR_NOISE):
+        return ""
+    if len(c) > ERROR_HEAD + ERROR_TAIL:
+        c = c[:ERROR_HEAD] + f"\n… (−{len(c) - ERROR_HEAD - ERROR_TAIL} симв.) …\n" + c[-ERROR_TAIL:]
+    return c
+
+
 def extract(o):
     kind = o.get("type")
     msg = o.get("message") or {}
@@ -78,6 +98,12 @@ def extract(o):
             t = REMINDER.sub("", t).strip()
             if t:
                 out.append((role, t))
+        if isinstance(content, list):
+            for b in content:
+                if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("is_error"):
+                    t = error_text(b)
+                    if t:
+                        out.append(("error", t))
     elif kind == "assistant" and isinstance(content, list):
         for b in content:
             if not isinstance(b, dict):
@@ -497,7 +523,8 @@ SEARCH_TOOL = {
     "name": "session_search",
     "description": (
         "Поиск по всем прошлым сессиям Claude Code на этом Mac (все проекты): запросы пользователя, твои ответы, "
-        "выполненные команды и сводки после /compact. Используй, когда пользователь ссылается на прошлую работу "
+        "выполненные команды, их ошибки (вывод с ненулевым кодом и т. п., обычный вывод не ищется) и сводки после "
+        "/compact. Чтобы найти, как уже чинили такую же ошибку, ищи её текст с roles=[\"error\"]. Используй, когда пользователь ссылается на прошлую работу "
         "(«как мы делали…», «в прошлый раз», «в сессии sightra»), или когда решение, скорее всего, уже "
         "находили раньше. Все слова должны встретиться в одном сообщении, регистр и форма слова не важны "
         "(сессия найдёт сессии, signing найдёт signed), обрубок слова от 3 букв (fastl, подпис) находит "
@@ -512,7 +539,8 @@ SEARCH_TOOL = {
             "project": {"type": "string", "description": "только в этом проекте: имя папки или его начало, «~» — домашний каталог"},
             "days": {"type": "integer", "description": "только сессии, в которых что-то было за последние N дней"},
             "roles": {"type": "array", "items": {"type": "string", "enum": list(ROLES)},
-                      "description": "где искать: user — запросы, claude — ответы, tool — команды, summary — сводки; по умолчанию везде"},
+                      "description": "где искать: user — запросы, claude — ответы, tool — команды, error — ошибки команд, "
+                                     "summary — сводки; по умолчанию везде"},
             "limit": {"type": "integer", "description": "сколько сессий показать, по умолчанию 8"},
         },
         "required": ["query"],

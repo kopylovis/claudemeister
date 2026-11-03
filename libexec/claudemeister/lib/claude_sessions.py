@@ -22,7 +22,7 @@ def usage():
     print("claudemeister sessions mv <id> <папка>  перенести в другую папку: путь, имя проекта из папки проектов или root")
     print("claudemeister sessions rm <id>... [-y]  удалить вместе с историей запросов этой сессии")
     print("claudemeister sessions clean [-y]       битые ссылки, сессии без единого ответа, папки удалённых проектов")
-    print("claudemeister sessions search <слова>   поиск по всем сессиям; -p <проект>, -d <дней>")
+    print("claudemeister sessions search <слова>   поиск по всем сессиям; -p <проект>, -d <дней>, -r error — по ошибкам")
     print("claudemeister sessions show <id> [N]    прочитать сессию с сообщения N (из search), -N — с конца")
     print("claudemeister sessions slim             что даст сжатие старых частей сессий (скриншоты, длинные выводы)")
     print("claudemeister sessions slim <id> [-y]   сжать; --copy — сжатую копию с новым id для проверки;")
@@ -373,7 +373,7 @@ def main():
         rest, opts = [], {}
         i = 1
         while i < len(args):
-            if args[i] in ("-p", "-d") and i + 1 < len(args):
+            if args[i] in ("-p", "-d", "-r") and i + 1 < len(args):
                 opts[args[i]] = args[i + 1]
                 i += 2
                 continue
@@ -382,7 +382,11 @@ def main():
         days = opts.get("-d")
         if days is not None and not days.isdigit():
             sys.exit("claudemeister sessions: после -d нужно число дней")
+        roles = opts.get("-r", "").split(",") if opts.get("-r") else None
+        if roles and not set(roles) <= set(claude_search.ROLES):
+            sys.exit("claudemeister sessions: после -r одна из ролей: " + ", ".join(claude_search.ROLES))
         text, err = claude_search.search(" ".join(rest), project=opts.get("-p"), days=int(days) if days else None,
+                                         roles=roles,
                                          exclude=[os.environ["CLAUDE_CODE_SESSION_ID"]]
                                          if os.environ.get("CLAUDE_CODE_SESSION_ID") else None)
         print(text.replace("session_read с id и at=<номер после #>", "claudemeister sessions show <id> <номер после #>"))
