@@ -26,6 +26,15 @@ def is_hook(command, sub):
 
 
 # Хук или statusLine, которые ставил mnrh claude setup: .../mnrh claude <команда>
+# Хуки Claude Code, которые ставит claudemeister setup: (событие, команда claudemeister, async, matcher).
+# Старые хуки mnrh claude <команда> setup заменяет этими. Поменял matcher: claude_setup.pending заметит и предложит setup.
+HOOKS = [("SessionStart", "notice", False, None), ("SessionEnd", "session-end", False, None),
+         ("UserPromptSubmit", "notify-hook", True, None), ("Stop", "notify-hook", True, None),
+         ("Notification", "notify-hook", True, None),
+         ("PreToolUse", "guard-hook", False, "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep"),
+         ("SessionStart", "humanize-hook", False, None), ("UserPromptSubmit", "humanize-hook", False, None),
+         ("Stop", "humanize-hook", True, None)]
+STATUS_CMD = "statusline"
 LEGACY_CALL = re.compile(r"\bmnrh['\"]?\s+claude\s+\S")
 TTY = sys.stdout.isatty()
 

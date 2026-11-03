@@ -31,6 +31,10 @@ SECRET_NAMES = [".env", ".env.*", "*.p8", "*.p12", "*.pfx", "*.jks", "*.keystore
                 "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa", "*service-account*.json", "*service_account*.json",
                 "*credentials*.json", "credentials", "keystore.properties", "signing.properties", ".netrc",
                 ".npmrc", ".pypirc", "*.mobileprovision"]
+# имена, по которым видно, что маска Grep ("**/.env*", "id_*") захватит секреты; "*" и "*.*" ищут везде и не в счет
+SECRET_SAMPLES = [".env", ".env.local", ".env.production", "id_rsa", "id_ed25519", ".netrc", ".npmrc", "key.p8",
+                  "release.jks", "release.keystore"]
+CATCH_ALL = {"*", "**", "**/*", "*.*"}
 NOT_SECRET = [".env.example", ".env.sample", ".env.template", ".env.dist", "*.pub"]
 READERS = {"cat", "less", "more", "head", "tail", "bat", "cp", "scp", "rsync", "base64", "xxd", "hexdump",
            "strings", "grep", "rg", "open", "pbcopy", "sed", "awk", "source", ".", "keytool", "openssl"}
@@ -221,6 +225,14 @@ def check(tool, inp, cwd, scratch=None):
     cwd = os.path.normpath(cwd or os.getcwd())
     if tool == "Bash":
         return check_bash(str(inp.get("command") or ""), cwd)
+    if tool == "Grep":
+        # Grep с output_mode content выводит строки файла в переписку так же, как Read
+        path, mask = str(inp.get("path") or ""), str(inp.get("glob") or "")
+        name = mask[3:] if mask.startswith("**/") else mask
+        if (path and is_secret(path)) or (name and (is_secret(name) or name not in CATCH_ALL and any(
+                fnmatch.fnmatch(sample, name) for sample in SECRET_SAMPLES))):
+            return "secrets-read", f"поиск в {tilde(path or mask)}: это секрет, найденные строки попадут в переписку"
+        return None
     path = inp.get("file_path") or inp.get("notebook_path") or ""
     if tool in ("Read", "Edit", "Write", "MultiEdit", "NotebookEdit") and path and is_secret(path):
         verb = "чтение" if tool == "Read" else "правка"
@@ -229,7 +241,8 @@ def check(tool, inp, cwd, scratch=None):
 
 
 def call_key(sid, tool, inp):
-    raw = json.dumps([sid, tool, inp.get("command") or inp.get("file_path") or ""], sort_keys=True)
+    raw = json.dumps([sid, tool, inp.get("command") or inp.get("file_path") or inp.get("path") or inp.get("glob")
+                      or ""], sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -248,8 +261,11 @@ def load_pending(sid):
 def save_pending(sid, data):
     os.makedirs(GUARD_STATE, exist_ok=True)
     data = {k: v for k, v in data.items() if time.time() - v < 3600}
-    with open(pending_path(sid), "w") as f:
+    path = pending_path(sid)
+    tmp = f"{path}.{os.getpid()}"
+    with open(tmp, "w") as f:
         json.dump(data, f)
+    os.replace(tmp, path)
 
 
 def last_user(path):

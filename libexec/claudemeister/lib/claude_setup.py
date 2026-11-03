@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, LEGACY_CALL, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
+from mnrhlib import HOME, HOOKS, LEGACY_CALL, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
 
 STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "mnrh", "claude-setup.json")
 CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
@@ -88,6 +88,20 @@ def proxy_configured():
     return claude_proxy.configured()
 
 
+def hooks_outdated():
+    """True, если какого-то нашего хука нет в settings.json или у него старый matcher (например, guard без Grep)."""
+    from mnrhlib import is_hook
+    try:
+        with open(os.path.join(CLAUDE, "settings.json")) as f:
+            hooks = json.load(f).get("hooks") or {}
+        have = {(event, e.get("matcher"), h.get("command", "")) for event, entries in hooks.items()
+                for e in entries for h in e.get("hooks", [])}
+    except (OSError, ValueError, AttributeError, TypeError):
+        return False
+    return any(not any(ev == event and m == matcher and is_hook(str(c), cmd) for ev, m, c in have)
+               for event, cmd, _, matcher in HOOKS)
+
+
 def legacy():
     """True, если /restart, хуки или MCP-сервер еще из mnrh: вызывают mnrh claude, а не claudemeister."""
     def text(path):
@@ -127,6 +141,8 @@ def pending():
         done = done | {"promptsill"}
     if not (raw() or {}).get("legacy_declined") and legacy():
         done = done - set(LEGACY)
+    if "hooks" in done and hooks_outdated():
+        done = done - {"hooks"}
     return [s for s in IDS if s not in done and s not in skipped], False
 
 
