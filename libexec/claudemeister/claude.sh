@@ -48,7 +48,7 @@ claudemeister --version             версия
 
 caffeinate (по умолчанию) не даёт Mac уснуть, пока идёт сессия:
 удобно для долгих задач и Remote Control с телефона. Экран при этом гаснуть может.
-С закрытой крышкой на батарее Mac всё равно уснёт. Не уснёт, если стоит mnrh и сделан mnrh sleep lid setup.
+С закрытой крышкой на батарее Mac все равно уснет, caffeinate этого не отменяет.
 Папка проектов: ~/Developer, строка projects=<путь> в ~/.config/mnrh/config или MNRH_PROJECTS=<путь>.
 EOF
 }
@@ -183,10 +183,8 @@ fi
 
 cd "$dir" || exit 1
 echo "-> ${dir/#$HOME/~} · $mode$([ "$net" = vps ] && echo ' · через VPS')"
-# сон с закрытой крышкой выключает mnrh sleep lid, он есть только в полном mnrh
+# если рядом стоит mnrh с настроенным sleep lid, он держит Mac и с закрытой крышкой; без mnrh шаг молча пропускается
 MNRH=$(command -v mnrh)
-[ "$mode" = caffeinate ] && [ -n "$MNRH" ] && [ ! -f /etc/sudoers.d/mnrh-pmset ] &&
-  printf '\033[2m   закрытая крышка на батарее всё равно усыпит Mac: mnrh sleep lid setup\033[0m\n'
 if [ "$mode" = caffeinate ]; then
   [ -n "$MNRH" ] && "$MNRH" sleep lid keep >/dev/null 2>&1
   exec ${pre[@]+"${pre[@]}"} caffeinate -is "$CLAUDE_BIN" "${passthrough[@]+"${passthrough[@]}"}"
