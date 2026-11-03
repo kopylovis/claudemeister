@@ -19,6 +19,7 @@ claudemeister ... -x         through your own VPS, this session only
 claudemeister ... -i         nothing written to disk: no transcript, no prompt history
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
+claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
 claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
 claudemeister fresh          from inside Claude: new untitled session, this one stays in /resume
@@ -55,6 +56,10 @@ Claude Code deletes transcripts older than `cleanupPeriodDays`, 30 days by defau
 setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If you run `claudemeister` before
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
+
+`claudemeister doctor` checks all of it in one go: Claude Code on PATH, the commands and whether they match this
+version, the hooks, transcript retention, the status line, the MCP server answering `tools/list`, the zsh hook,
+the notification app and the proxy. It exits with 1 when something is broken and says what fixes it.
 
 Update with `brew upgrade claudemeister`. Open sessions pick up the new version on their own: before each
 request the MCP server checks whether its code changed (a `brew upgrade` or a `git pull` in a checkout) and, if

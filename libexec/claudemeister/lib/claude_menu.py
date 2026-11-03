@@ -23,6 +23,7 @@ ACTIONS = [
     ("proxy setup", "прокси через VPS: настроить по подписке"),
     ("humanize switch", "humanization: включить или выключить"),
     ("setup", "настроить Claude Code: команды, хуки, MCP-сервер"),
+    ("doctor", "проверить установку claudemeister"),
 ]
 
 
