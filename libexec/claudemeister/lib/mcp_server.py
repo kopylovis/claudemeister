@@ -1,6 +1,7 @@
 """MCP-сервер claudemeister: claudemeister mcp."""
 import json
 import os
+import shutil
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -135,14 +136,92 @@ def tools():
     return [TOOL, FORGET_TOOL, FRESH_TOOL, SLIM_TOOL, claude_open.TOOL] + EXTRA_TOOLS
 
 
+LIB = os.path.dirname(os.path.abspath(__file__))
+PENDING = "MNRH_MCP_PENDING"
+TOOL_NAMES = "MNRH_MCP_TOOLS"
+
+
+def code_stamp():
+    """Отпечаток кода: меняется после brew upgrade или git pull, тогда сервер перезапускает себя."""
+    try:
+        files = [os.path.join(LIB, n) for n in os.listdir(LIB) if n.endswith(".py")]
+        files.append(os.path.join(os.path.dirname(os.path.dirname(LIB)), "..", "VERSION"))
+        return len(files), max(os.path.getmtime(f) for f in files)
+    except (OSError, ValueError):
+        return None
+
+
+HOME_DIR = os.path.realpath(os.path.join(LIB, "..", "..", ".."))
+OWN_BIN = os.path.join(HOME_DIR, "bin", "claudemeister")
+
+
+def brew_bin():
+    """claudemeister из Homebrew в PATH, если этот сервер запущен из Cellar; иначе None."""
+    if "/Cellar/claudemeister/" not in HOME_DIR + "/":
+        return None
+    return shutil.which("claudemeister")
+
+
+def installed_elsewhere():
+    """brew upgrade ставит новую версию в другую папку Cellar: claudemeister в PATH уже не наш."""
+    found = brew_bin()
+    return bool(found) and os.path.dirname(os.path.dirname(os.path.realpath(found))) != HOME_DIR
+
+
+def reload(pending):
+    """Заменить процесс свежим claudemeister mcp на тех же stdin и stdout: Claude Code этого не заметит.
+    Непрочитанные запросы уходят новому процессу через файл."""
+    import tempfile
+    fd, path = tempfile.mkstemp(prefix="cm-mcp-")
+    with os.fdopen(fd, "wb") as f:
+        f.write(pending)
+    os.environ[PENDING] = path
+    os.environ[TOOL_NAMES] = ",".join(sorted(t["name"] for t in tools()))
+    target = brew_bin() or OWN_BIN
+    sys.stdout.flush()
+    os.execv(target, [target, "mcp"])
+
+
+def lines_from(fd, carry=b""):
+    """Строки stdin без буфера Python: при перезапуске нельзя потерять уже прочитанное."""
+    buf = carry
+    while True:
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            yield line, buf
+        chunk = os.read(fd, 65536)
+        if not chunk:
+            if buf.strip():
+                yield buf, b""
+            return
+        buf += chunk
+
+
 def mcp():
     def send(msg):
         sys.stdout.write(json.dumps(msg, ensure_ascii=False) + "\n")
         sys.stdout.flush()
 
-    for line in sys.stdin:
+    carry = b""
+    path = os.environ.pop(PENDING, "")
+    if path:
         try:
-            req = json.loads(line)
+            with open(path, "rb") as f:
+                carry = f.read()
+            os.remove(path)
+        except OSError:
+            pass
+    before = os.environ.pop(TOOL_NAMES, None)
+    if before is not None and before != ",".join(sorted(t["name"] for t in tools())):
+        send({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
+    stamp = code_stamp()
+
+    for raw, rest in lines_from(sys.stdin.fileno(), carry):
+        now = code_stamp()
+        if now != stamp or now is None or installed_elsewhere():
+            reload(raw + b"\n" + rest)
+        try:
+            req = json.loads(raw.decode("utf-8", "replace"))
         except ValueError:
             continue
         if not isinstance(req, dict):  # пакеты JSON-RPC (массивы) MCP не использует, а падать из-за них нельзя
@@ -154,7 +233,7 @@ def mcp():
             ver = (req.get("params") or {}).get("protocolVersion") or "2025-06-18"
             send({"jsonrpc": "2.0", "id": rid, "result": {
                 "protocolVersion": ver,
-                "capabilities": {"tools": {}},
+                "capabilities": {"tools": {"listChanged": True}},
                 "serverInfo": {"name": MCP_NAME, "version": version()}}})
         elif method == "tools/list":
             send({"jsonrpc": "2.0", "id": rid, "result": {"tools": tools()}})

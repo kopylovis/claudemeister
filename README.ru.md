@@ -54,7 +54,9 @@ Claude Code удаляет переписки старше `cleanupPeriodDays`, 
 до setup или после обновления, в котором в setup появился новый шаг, он перечислит ненастроенное и предложит
 настроить. "Не предлагать" больше не спрашивает про эти шаги, `claudemeister setup` все равно настроит их.
 
-Обновление: `brew upgrade claudemeister`. Убрать из Claude Code: `claudemeister setup --remove`.
+Обновление: `brew upgrade claudemeister`. Открытые сессии подхватят новую версию сами: перед каждым
+запросом MCP-сервер проверяет, не сменился ли его код (`brew upgrade` или `git pull` в папке проекта), и если
+сменился, заменяет себя новым на том же соединении, не теряя запрос. Убрать из Claude Code: `claudemeister setup --remove`.
 Удаление: `brew uninstall claudemeister`.
 
 Папка проектов по умолчанию `~/Developer`, другую задает строка `projects=<путь>` в `~/.config/mnrh/config`

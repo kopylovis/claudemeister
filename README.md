@@ -56,7 +56,9 @@ setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If yo
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
 
-Update with `brew upgrade claudemeister`. `claudemeister setup --remove` takes everything out of Claude Code,
+Update with `brew upgrade claudemeister`. Open sessions pick up the new version on their own: before each
+request the MCP server checks whether its code changed (a `brew upgrade` or a `git pull` in a checkout) and, if
+so, replaces itself with the new one on the same connection, without losing the request. `claudemeister setup --remove` takes everything out of Claude Code,
 and `brew uninstall claudemeister` removes the program.
 
 The projects folder is `~/Developer` by default. Set another one with a `projects=<path>` line in
