@@ -299,10 +299,21 @@ worktree.
 claudemeister parallel list            branches, commits, whether Claude is working there
 claudemeister parallel merge <branch>  merge into the original branch (no push), remove the worktree
 claudemeister parallel drop <branch>   throw it away
+claudemeister parallel pr <branch>     push, open a PR, wait for CI, merge it, remove the worktree
 ```
 
 A merge won't start while Claude is open there, while there are uncommitted changes, or while the main folder is
 on a different branch than the original one. On a conflict it's aborted.
+
+`parallel pr` takes the change through GitHub instead. It refuses while Claude is open in the worktree or the
+worktree has uncommitted changes. It pushes the branch (never tags), opens a PR into the original branch with
+`gh pr create --fill`, or reuses the open one, and picks the merge method from that branch's history: `--merge`
+if it already has merge commits, `--rebase` otherwise. If the PR has checks, it waits for them with
+`gh pr checks --watch`; with no checks it merges right away. After `gh pr merge --delete-branch` it removes the
+worktree and the local branch, like `drop`, and fast-forwards the original branch in the main folder when that
+branch is checked out there and clean. If CI fails, the PR stays open, the worktree stays, and the failing checks
+are listed: fix them in the worktree, commit, and run `parallel pr` again. `--no-merge` only pushes and opens the
+PR. In Claude Code the same is `parallel_finish` with `action: "pr"`.
 
 ## Window screenshot: `claudemeister shot`
 

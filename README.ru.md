@@ -307,10 +307,22 @@ Terminal или iTerm2 второй Claude с задачей и Remote Control. 
 claudemeister parallel list            ветки, коммиты, работает ли там Claude
 claudemeister parallel merge <ветка>   влить в исходную ветку (без пуша), убрать worktree
 claudemeister parallel drop <ветка>    выбросить
+claudemeister parallel pr <ветка>      пуш, PR, ждать CI, слить PR, убрать worktree
 ```
 
 Слияние не начнётся, пока там открыт Claude, есть незакоммиченное или основная папка
 стоит не на исходной ветке; при конфликте оно отменяется.
+
+`parallel pr` проводит изменение через GitHub. Пока в worktree открыт Claude или там есть
+незакоммиченное, он отказывается. Пушит ветку (теги никогда), открывает PR в исходную ветку
+через `gh pr create --fill` или берёт уже открытый, а способ слияния выбирает по истории
+исходной ветки: есть в ней merge-коммиты — `--merge`, нет — `--rebase`. Если у PR есть
+проверки, ждёт их через `gh pr checks --watch`, если нет — сливает сразу. После
+`gh pr merge --delete-branch` убирает worktree и локальную ветку, как `drop`, и перематывает
+исходную ветку в основной папке, если она там открыта и чистая. Если CI упал, PR остаётся
+открытым, worktree тоже, а упавшие проверки выводятся списком: почини в worktree, закоммить и
+запусти `parallel pr` снова. `--no-merge` только пушит и открывает PR. В Claude Code то же
+самое — `parallel_finish` с `action: "pr"`.
 
 ## Снимок окна: `claudemeister shot`
 
