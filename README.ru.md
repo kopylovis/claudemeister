@@ -554,6 +554,16 @@ Mac. Нажатия принимаются только из чата, где п
 `phone always` — всегда, `phone off` — выключить, `phone test` — пробное. Уходят в канал `claude`,
 вопросы и просьбы о разрешении — с высоким приоритетом. На телефоне: Tossling → Уведомления → + → `claude`.
 
+С Remote Control Claude Code сам присылает push в приложение Claude на телефоне. Если сессия
+подключена (`/remote-control`, `--remote-control` или «Enable Remote Control for all sessions») и в
+`/config` включено **Push when actions required** (`inputNeededNotifEnabled`), claudemeister не шлёт
+запросы разрешения и вопросы этой сессии в Telegram и Tossling, чтобы они не приходили дважды;
+уведомление на Mac остаётся. Подключение claudemeister видит по `CLAUDE_CODE_BRIDGE_SESSION_ID`:
+Claude Code v2.1.199 и новее задаёт его в командах хуков, пока Remote Control подключён. «Готово» и
+«ждёт тебя» уходят как раньше: о них Claude присылает push, только если сам решит. Если в `/config`
+написано «No mobile registered», открой приложение Claude на телефоне или выключи переключатель,
+и эти уведомления снова пойдут через claudemeister.
+
 Иконка claudemeister Notify — `share/claudemeister/icon.png`, 1024×1024 (скругленная копия для README лежит в `docs/icon.png`),
 картинка до края без прозрачности: macOS 26 сама скругляет её, а иконку с полями или
 прозрачными углами кладёт на серую подложку. Из PNG при сборке делается `AppIcon.icns`;
