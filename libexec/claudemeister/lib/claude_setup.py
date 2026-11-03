@@ -21,7 +21,8 @@ STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".c
 CLAUDE = CLAUDE_HOME
 STEPS = [
     ("commands", "команды /restart, /forget, /fresh, /slim, /todo и другие"),
-    ("hooks", "хуки Claude Code: сообщения после /restart, guard, уведомления, humanization, строка состояния"),
+    ("hooks", "хуки Claude Code: сообщения после /restart, guard, уведомления, humanization, строка состояния; "
+              "хранить переписки год, а не 30 дней"),
     ("zsh", "хук перезапуска в ~/.zshrc"),
     ("mcp", "MCP-сервер claudemeister"),
     ("notify-app", "приложение уведомлений"),
@@ -91,7 +92,8 @@ def hooks_outdated():
     if not os.path.exists(claude_settings.PATH):
         return False
     try:
-        return bool(claude_settings.missing(claude_settings.load(), exact=True))
+        settings = claude_settings.load()
+        return bool(claude_settings.missing(settings, exact=True)) or "cleanupPeriodDays" not in settings
     except (OSError, ValueError):
         return False
 

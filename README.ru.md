@@ -46,6 +46,9 @@ Homebrew ставит заодно mihomo для `claudemeister -x`. `claudemeis
 ли его сейчас (`--country KZ` сразу задает страну выхода). Если нет строки состояния
 [promptsill](https://github.com/kopylovis/promptsill), предлагает поставить ее через Homebrew.
 
+Claude Code удаляет переписки старше `cleanupPeriodDays`, по умолчанию через 30 дней, и вместе с ними пропадает
+все, что могли найти `session_search` и `/resume`. setup ставит 365, если у тебя нет своего значения.
+
 Какие шаги сделаны, setup записывает в `~/.config/mnrh/claude-setup.json`. Если `claudemeister` запустить
 до setup или после обновления, в котором в setup появился новый шаг, он перечислит ненастроенное и предложит
 настроить. "Не предлагать" больше не спрашивает про эти шаги, `claudemeister setup` все равно настроит их.
