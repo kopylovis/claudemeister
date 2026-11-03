@@ -445,9 +445,17 @@ def resume(s, mode):
         sys.exit(f"claudemeister sessions: не запустился {cmd[0]}: {e}")
 
 
+def offline(home, encoded):
+    """Папка на внешнем диске, который сейчас не подключен: проект, скорее всего, жив, удалять нельзя."""
+    if home and home.startswith("/Volumes/"):
+        volume = "/".join(home.split("/")[:3])
+        return not (os.path.ismount(volume) or os.path.islink(volume))  # Macintosh HD — ссылка на /
+    return home is None and encoded.startswith("-Volumes-")
+
+
 def clean(assume_yes):
     everything = load()
-    broken, empty, orphans = [], [], []
+    broken, empty, orphans, away = [], [], [], []
     for d in sorted(os.listdir(PROJECTS)):
         pdir = os.path.join(PROJECTS, d)
         if not os.path.isdir(pdir) or os.path.islink(pdir):
@@ -460,7 +468,9 @@ def clean(assume_yes):
         cwds = collections.Counter(s["cwd"] for s in sessions if s["cwd"])
         home = cwds.most_common(1)[0][0] if cwds else decode(d)
         if home is None or not os.path.isdir(home):
-            if os.listdir(pdir):
+            if offline(home, d):
+                away.append(home or d)
+            elif os.listdir(pdir):
                 orphans.append((pdir, home, sessions))
             continue
         for s in sessions:
@@ -468,6 +478,10 @@ def clean(assume_yes):
                 empty.append(s)
 
     did = False
+    if away:
+        print(f"Проекты на отключенных дисках ({len(away)}) не трогаю: " + ", ".join(tilde(h) for h in away[:5])
+              + (" и другие" if len(away) > 5 else ""))
+        print()
     if broken:
         print(f"Битые ссылки ({len(broken)}):")
         for p in broken:

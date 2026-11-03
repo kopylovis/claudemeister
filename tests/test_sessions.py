@@ -44,5 +44,17 @@ class Forget(unittest.TestCase):
         self.assertTrue(all("99999999" in p for p in left), left)
 
 
+class Offline(unittest.TestCase):
+    def test_unplugged_drive_is_not_an_orphan(self):
+        r, _ = in_sandbox("""
+            import claude_sessions as s
+            print(s.offline("/Volumes/NoSuchDrive-cm/proj", "-Volumes-NoSuchDrive-cm-proj"))
+            print(s.offline(None, "-Volumes-NoSuchDrive-cm-proj"))
+            print(s.offline("/Users/x/gone", "-Users-x-gone"))
+            print(s.offline(None, "-Users-x-gone"))
+        """)
+        self.assertEqual(r.stdout.split(), ["True", "True", "False", "False"], r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
