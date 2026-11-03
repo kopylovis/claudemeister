@@ -5,17 +5,17 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, badge, hook_command, is_hook, read_config, tilde, write_config
+from mnrhlib import CLAUDE_HOME, HOME, badge, read_config, tilde, write_config
+import claude_settings
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))))
 RULES = os.path.join(ROOT, "share", "claudemeister", "humanize.md")
 STATE = os.path.join(HOME, ".cache", "mnrh", "humanize")
 LOG = os.path.join(HOME, "Library", "Logs", "mnrh-humanize.log")
-CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
-SETTINGS = os.path.join(CLAUDE, "settings.json")
-SLASH_FILE = os.path.join(CLAUDE, "commands", "humanize.md")
+SETTINGS = claude_settings.PATH
+SLASH_FILE = os.path.join(CLAUDE_HOME, "commands", "humanize.md")
 HOOK_CMD = "humanize-hook"
-HOOK_EVENTS = [("SessionStart", False), ("UserPromptSubmit", False), ("Stop", True)]
+HOOK_ROWS = claude_settings.rows(HOOK_CMD)
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 REMINDER = ("claudemeister humanization включена, правила письма из начала сессии действуют для всего, что ты пишешь людям. "
@@ -160,46 +160,24 @@ INVISIBLE = re.compile("[\u200b-\u200d\u2060\u00ad\u2010\u2011\u200e\u200f\u202a
 MERISM = re.compile(r"\bот\s+([^\d.!?,;:\n]{2,40}?)\s+до\s+([^\d.!?,;:\n]{2,40}?)(?=[,.;!?\n]|$)", re.I)
 
 
-def settings():
-    try:
-        with open(SETTINGS) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-
 def missing_hooks():
     try:
-        hooks = settings().get("hooks", {})
+        return [r[0] for r in claude_settings.missing(claude_settings.load(), HOOK_ROWS)]
     except ValueError:
-        return [e for e, _ in HOOK_EVENTS]
-    return [event for event, _ in HOOK_EVENTS
-            if not any(is_hook(h.get("command", ""), HOOK_CMD) for e in hooks.get(event, []) for h in e.get("hooks", []))]
+        return [r[0] for r in HOOK_ROWS]
 
 
 def install_hooks():
     """Подключает хуки humanize и /humanize, если их нет; остальное в settings.json не трогает."""
-    missing = missing_hooks()
-    if missing:
-        try:
-            data = settings()
-        except ValueError as e:
-            print(f"✗ {tilde(SETTINGS)} не читается как JSON ({e}), хуки не подключил")
-            return False
-        hooks = data.setdefault("hooks", {})
-        for event, run_async in HOOK_EVENTS:
-            if event in missing:
-                hook = {"type": "command", "command": hook_command(HOOK_CMD), "timeout": 10}
-                if run_async:
-                    hook["async"] = True
-                hooks.setdefault(event, []).append({"hooks": [hook]})
-        os.makedirs(CLAUDE, exist_ok=True)
-        tmp = SETTINGS + ".mnrh-tmp"
-        with open(tmp, "w") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-        os.replace(tmp, SETTINGS)
-        print(f"✓ подключил хуки {', '.join(missing)} в {tilde(SETTINGS)}")
+    try:
+        data = claude_settings.load()
+        added = claude_settings.add_missing_hooks(data, HOOK_ROWS)
+    except ValueError as e:
+        print(f"✗ {tilde(SETTINGS)} не читается как JSON ({e}), хуки не подключил")
+        return False
+    if added:
+        claude_settings.save_atomic(data)
+        print(f"✓ подключил хуки {', '.join(added)} в {tilde(SETTINGS)}")
     if not os.path.exists(SLASH_FILE):
         from slash import EXTRA_SLASH
         os.makedirs(os.path.dirname(SLASH_FILE), exist_ok=True)

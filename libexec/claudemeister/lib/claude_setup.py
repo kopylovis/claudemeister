@@ -8,17 +8,16 @@ claudemeister перед запуском сверяет запись со STEPS
 """
 import json
 import os
-import shlex
 import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import (HOME, HOOKS, LEGACY_CALL, OK, PROMPTSILL_HINT, STATUS_CMD, WARN, is_hook,  # noqa: E402
-                     promptsill_path, tilde)
+from mnrhlib import CLAUDE_HOME, HOME, LEGACY_CALL, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
+import claude_settings  # noqa: E402
 
 STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "mnrh", "claude-setup.json")
-CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
+CLAUDE = CLAUDE_HOME
 STEPS = [
     ("commands", "команды /restart, /forget, /fresh, /slim, /todo и другие"),
     ("hooks", "хуки Claude Code: сообщения после /restart, guard, уведомления, humanization, строка состояния"),
@@ -92,16 +91,12 @@ def proxy_configured():
 
 def hooks_outdated():
     """True, если какого-то нашего хука нет в settings.json или у него старый matcher (например, guard без Grep)."""
-    from mnrhlib import is_hook
-    try:
-        with open(os.path.join(CLAUDE, "settings.json")) as f:
-            hooks = json.load(f).get("hooks") or {}
-        have = {(event, e.get("matcher"), h.get("command", "")) for event, entries in hooks.items()
-                for e in entries for h in e.get("hooks", [])}
-    except (OSError, ValueError, AttributeError, TypeError):
+    if not os.path.exists(claude_settings.PATH):
         return False
-    return any(not any(ev == event and m == matcher and is_hook(str(c), cmd) for ev, m, c in have)
-               for event, cmd, _, matcher in HOOKS)
+    try:
+        return bool(claude_settings.missing(claude_settings.load(), exact=True))
+    except (OSError, ValueError):
+        return False
 
 
 def legacy():
@@ -115,14 +110,12 @@ def legacy():
     if LEGACY_CALL.search(text(os.path.join(CLAUDE, "commands", "restart.md"))):
         return True
     try:
-        settings = json.loads(text(os.path.join(CLAUDE, "settings.json")) or "{}")
-        commands = [h.get("command", "") for entries in (settings.get("hooks") or {}).values()
-                    for e in entries for h in e.get("hooks", [])]
-        line = settings.get("statusLine")
-        commands.append(line.get("command", "") if isinstance(line, dict) else "")
-    except (ValueError, AttributeError, TypeError):
+        settings = claude_settings.load()
+        commands = [c for _, _, c in claude_settings.hook_commands(settings)] + \
+            [claude_settings.statusline_command(settings)]
+    except (OSError, ValueError):
         commands = []
-    if any(LEGACY_CALL.search(str(c)) for c in commands):
+    if any(LEGACY_CALL.search(c) for c in commands):
         return True
     try:
         servers = json.loads(text(os.path.join(HOME, ".claude.json")) or "{}").get("mcpServers") or {}
@@ -215,30 +208,16 @@ def promptsill_step():
 
 def promptsill_statusline():
     """promptsill поставлен вне полного setup: прописать его в statusLine, если там пусто или наша заглушка."""
-    path = os.path.join(CLAUDE, "settings.json")
     try:
-        with open(path) as f:
-            settings = json.load(f)
-    except FileNotFoundError:
-        settings = {}
+        settings = claude_settings.load()
     except ValueError:
-        print(f"{WARN} {tilde(path)} не читается как JSON, statusLine не трогаю. Поставь сам: promptsill install")
+        print(f"{WARN} {tilde(claude_settings.PATH)} не читается как JSON, statusLine не трогаю. "
+              "Поставь сам: promptsill install")
         return
-    if not isinstance(settings, dict):
-        return
-    line = settings.get("statusLine")
-    if line and not is_hook(str(line.get("command", "")) if isinstance(line, dict) else "", STATUS_CMD):
-        return
-    settings["statusLine"] = {"type": "command", "command": shlex.quote(promptsill_path()), "padding": 0,
-                              "refreshInterval": 10}
-    os.makedirs(CLAUDE, exist_ok=True)
-    path = os.path.realpath(path)  # settings.json из dotfiles остается ссылкой
-    tmp = f"{path}.{os.getpid()}"
-    with open(tmp, "w") as f:
-        json.dump(settings, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    os.replace(tmp, path)
-    print(f"{OK} строка состояния → statusLine (promptsill)")
+    promptsill = promptsill_path()
+    if promptsill and claude_settings.ensure_statusline(settings, promptsill):
+        claude_settings.save_atomic(settings)
+        print(f"{OK} строка состояния → statusLine (promptsill)")
 
 
 def check():

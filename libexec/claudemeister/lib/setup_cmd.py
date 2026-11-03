@@ -1,26 +1,24 @@
 """claudemeister setup: команды, хуки Claude Code, хук zsh, MCP-сервер; --remove убирает их."""
-import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOOKS, STATUS_CMD  # noqa: E402
-from mnrhlib import CM, HOME, PROMPTSILL_HINT, ROOT, hook_command, is_hook, promptsill_path, tilde  # noqa: E402
-from claude_proc import CLAUDE, CLAUDE_BIN  # noqa: E402
+from mnrhlib import CLAUDE_HOME, CM, HOME, PROMPTSILL_HINT, ROOT, STATUS_CMD, is_hook, promptsill_path, tilde  # noqa: E402
+from claude_proc import CLAUDE_BIN  # noqa: E402
+import claude_settings  # noqa: E402
 from mcp_server import MCP_NAME, READ_ONLY, tools  # noqa: E402
 from slash import EXTRA_COMMANDS, EXTRA_SLASH, FORGET_SLASH, FRESH_SLASH, SLASH, SLIM_SLASH  # noqa: E402
 
-COMMANDS = os.path.join(CLAUDE, "commands")
+COMMANDS = os.path.join(CLAUDE_HOME, "commands")
 COMMAND_FILE = os.path.join(COMMANDS, "restart.md")
 FORGET_FILE = os.path.join(COMMANDS, "forget.md")
 FRESH_FILE = os.path.join(COMMANDS, "fresh.md")
 OLD_FORGET_FILE = os.path.join(COMMANDS, "forget-session.md")
 SLIM_FILE = os.path.join(COMMANDS, "slim.md")
-SETTINGS = os.path.join(CLAUDE, "settings.json")
+SETTINGS = claude_settings.PATH
 # Так MCP-сервер назывался, пока claudemeister был частью mnrh (mnrh claude mcp). setup его убирает.
 OLD_MCP_NAME = "mnrh"
 # Строка хука перезапуска в ~/.zshrc: новая и та, что ставил mnrh
@@ -65,40 +63,17 @@ def rename_rule(rule):
 def notice_hook(install, rename_rules=False):
     """rename_rules: перевести разрешения старого MCP-сервера mnrh на claudemeister (сервер mnrh был наш)."""
     try:
-        with open(SETTINGS) as f:
-            settings = json.load(f)
-    except FileNotFoundError:
-        settings = {}
+        settings = claude_settings.load()
     except ValueError as e:
         print(f"✗ {tilde(SETTINGS)} не читается как JSON ({e}), хуки Claude Code не трогаю")
         return
-    hooks = settings.setdefault("hooks", {})
-    for event, cmd, run_async, matcher in HOOKS:
-        entries = [e for e in hooks.get(event, [])
-                   if not any(is_hook(h.get("command", ""), cmd) for h in e.get("hooks", []))]
-        if install:
-            hook = {"type": "command", "command": hook_command(cmd), "timeout": 10}
-            if run_async:
-                hook["async"] = True
-            entries.append(dict({"matcher": matcher} if matcher else {}, hooks=[hook]))
-        if entries:
-            hooks[event] = entries
-        else:
-            hooks.pop(event, None)
-    if not hooks:
-        settings.pop("hooks")
+    claude_settings.ensure_hooks(settings, install)
     line = settings.get("statusLine")
-    command = str(line.get("command", "")) if isinstance(line, dict) else ""
+    command = claude_settings.statusline_command(settings)
     ours = is_hook(command, STATUS_CMD) or "promptsill" in command
     promptsill = promptsill_path()
-    if install and promptsill and (not line or is_hook(command, STATUS_CMD)):
-        settings["statusLine"] = {"type": "command", "command": shlex.quote(promptsill),
-                                  "padding": 0, "refreshInterval": 10}
-    elif install and is_hook(command, STATUS_CMD):
-        # без promptsill оставляем заглушку statusline, но уже claudemeister, а не mnrh claude
-        settings["statusLine"] = dict(line, command=hook_command(STATUS_CMD))
-    elif not install and ours:
-        settings.pop("statusLine")
+    # без promptsill заглушка statusline остается, но уже claudemeister, а не mnrh claude
+    claude_settings.ensure_statusline(settings, promptsill, install)
     status_note = ("! строка состояния: у тебя уже своя statusLine, не трогаю" if line and not ours else
                    "✓ строка состояния: promptsill уже стоит в statusLine" if "promptsill" in command else
                    "✓ строка состояния → statusLine (promptsill)" if promptsill else
@@ -120,11 +95,7 @@ def notice_hook(install, rename_rules=False):
         perms.pop("allow", None)
     if not perms:
         settings.pop("permissions")
-    tmp = SETTINGS + ".mnrh-tmp"
-    with open(tmp, "w") as f:
-        json.dump(settings, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    os.replace(tmp, SETTINGS)
+    claude_settings.save_atomic(settings)
     if install:
         print(f"✓ сообщения после /restart и /forget, удаление пустых сессий → хуки SessionStart и SessionEnd "
               f"в {tilde(SETTINGS)}")
