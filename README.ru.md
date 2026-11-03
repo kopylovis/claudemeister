@@ -6,7 +6,7 @@
 
 Обвязка для [Claude Code](https://code.claude.com) на macOS: запуск в проекте с выбором сессии,
 перезапуск и сжатие сессии изнутри Claude, прокси через свой сервер для отдельных сессий, защита
-секретов, уведомления, правила письма без признаков нейросети и MCP-сервер с инструментами
+секретов и вопрос перед необратимыми командами, уведомления, правила письма без признаков нейросети и MCP-сервер с инструментами
 для поиска по прошлым сессиям, бэклога, параллельных задач, снимков окон и заметок к релизу.
 
 ```
@@ -29,7 +29,7 @@ claudemeister todo           бэклог задач проекта между �
 claudemeister shot [прил.]   снимок окна приложения; без аргументов список окон
 claudemeister deps           устаревшие зависимости Gradle в libs.versions.toml
 claudemeister proxy          прокси через свой сервер для выбранных сессий: setup, test, remove
-claudemeister guard          вопрос перед чтением и удалением ключей; on, off, test, log
+claudemeister guard          вопрос перед чтением и удалением ключей и необратимыми командами; on, off, test, log
 claudemeister humanize       правила письма без признаков нейросети: on, off, check <файл>, rules
 claudemeister notify         уведомления, когда Claude ждёт тебя: on, off, after <сек>, test, telegram
 ```
@@ -431,17 +431,22 @@ master ↑3 ±5 · vite :5173 · memory 9.9/16 GB · swap 1.5 · Gradle 2 (3.1 G
 при русской локали или с `promptsill install --lang ru`. Подробности — в README promptsill.
 `claudemeister statusline …` передаёт команды promptsill.
 
-### Защита секретов: `claudemeister guard`
+### Защита секретов и опасных команд: `claudemeister guard`
 
-Хук `PreToolUse` следит только за двумя вещами:
+Хук `PreToolUse` следит за тремя вещами:
 
 | Правило | Что |
 |---|---|
 | `secrets-read` | чтение и правка `.env*` (кроме `.example` и т. п.), `*.p8`, `*.p12`, `*.jks`, `*.keystore`, приватных ключей SSH, `*service-account*.json`, `*credentials*.json`, `keystore.properties`, `.netrc`, `.npmrc`; `security find-*-password -w` |
 | `secrets-delete` | `rm`, `rmdir`, `unlink`, `shred`, `trash` файла-ключа или папки, где ключи лежат (`~/.ssh`, `~/.gnupg`, `~/.aws`, связка ключей, `fastlane/` с `.p8` и JSON…); `security delete-*` |
+| `destructive` | `git reset --hard`; `git push --force`, `-f`, `--force-with-lease` или `+ветка` в любой remote; `git clean -f` с `-d` или `-x`; `git checkout -- .`, `git checkout -f`, `git restore .` (но не только `--staged`); `git branch -D`; `rm -r` пути вне проекта, самого проекта или `~` (временные папки, `~/.cache`, `~/Library/Caches` и DerivedData можно); `curl`/`wget … \| sh`, `bash`, `zsh` или `python`, если скрипт идёт со стандартного ввода, и `bash -c "$(curl …)"`; `dd of=/dev/disk…`; `diskutil erase*`; `mkfs`; `chmod`/`chown -R` для `/`, `~` и системных папок |
 
-Остальное (`git push --force`, `reset --hard`, `rm` обычных файлов, выкладка через fastlane,
-SQL, команды на сервере) guard не трогает — это на совести обычных разрешений Claude Code.
+Проект — корень git над рабочей папкой Claude (вне git — сама папка). У сессии, запущенной в `~`,
+проекта нет, и любой `rm -r` вне временных папок вызовет вопрос. Команды находятся и внутри `bash -c`,
+`sh -c`, `zsh -c` и `eval`, и после `sudo`, `env`, `xargs`, `nohup`, `time`. `git push origin main`,
+`rm -rf build` в проекте и `curl … | python3 -m json.tool` проходят. Остальное (`rm` обычных файлов
+в проекте, выкладка через fastlane, SQL, команды на сервере) guard не трогает — это на совести
+обычных разрешений Claude Code.
 
 Это не отказ, а вопрос. В обычном режиме Claude Code сам показывает «разрешить?» с
 объяснением. В режимах `auto` и `--dangerously-skip-permissions` Claude Code так не умеет
@@ -449,7 +454,7 @@ SQL, команды на сервере) guard не трогает — это н
 вызов, а Claude спрашивает тебя в чате, зачем ему это нужно. Ответишь «да» (или «ок»,
 «давай», «yes») — тот же вызов пройдёт; ответ привязан к этому вызову и к твоему
 сообщению после вопроса, модель не может ответить за тебя. `claudemeister guard skip
-secrets-read` выключает правило, `guard test '<команда>'` показывает решение, `guard log` —
+destructive` выключает правило, `guard test '<команда>'` показывает решение, `guard log` —
 последние срабатывания.
 
 ### Уведомления, когда Claude ждёт тебя
