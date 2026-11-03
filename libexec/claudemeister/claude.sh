@@ -40,7 +40,7 @@ claudemeister todo                  бэклог проекта между се�
 claudemeister shot                  снимок окна приложения (/shot)
 claudemeister deps                  устаревшие зависимости Gradle в gradle/libs.versions.toml
 claudemeister proxy                 прокси через VPS для отдельных сессий: setup, test, remove (proxy -h)
-claudemeister guard                 защита секретов: спросит перед чтением или удалением ключей
+claudemeister guard                 спросит перед чтением или удалением ключей и необратимыми командами
 claudemeister humanize              писать без признаков нейросети: on, off, check <файл>, rules (/humanize)
 claudemeister notify                уведомления, когда Claude ждёт тебя (on, off, after <сек>, test, telegram)
 claudemeister setup                 поставить /restart, хуки, MCP-сервер, хук zsh, прокси и promptsill

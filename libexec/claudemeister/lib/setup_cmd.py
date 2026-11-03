@@ -101,7 +101,8 @@ def notice_hook(install, rename_rules=False):
         print(f"✓ сообщения после /restart и /forget, удаление пустых сессий → хуки SessionStart и SessionEnd "
               f"в {tilde(SETTINGS)}")
         print(status_note)
-        print("✓ защита секретов: вопрос перед чтением и удалением ключей → хук PreToolUse (claudemeister guard)")
+        print("✓ guard: вопрос перед чтением и удалением ключей и перед необратимыми командами (reset --hard, "
+              "push --force, rm -r вне проекта…) → хук PreToolUse (claudemeister guard)")
         print("✓ уведомления, когда Claude ждёт тебя → хуки UserPromptSubmit, Stop и Notification "
               "(claudemeister notify -h)")
         print("✓ claudemeister humanization: правила письма без признаков нейросети → хуки SessionStart, UserPromptSubmit "
