@@ -19,6 +19,8 @@ claudemeister ... -x         through your own VPS, this session only
 claudemeister ... -i         nothing written to disk: no transcript, no prompt history
 claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
 claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
+claudemeister ps             open Claude Code sessions: which wait for you; pick one to jump to its tab
+claudemeister restore        reopen the sessions that were open when the Mac rebooted or Claude crashed
 claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
 claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
@@ -56,6 +58,12 @@ Claude Code deletes transcripts older than `cleanupPeriodDays`, 30 days by defau
 setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If you run `claudemeister` before
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
+
+Every session start records the session in `~/.cache/mnrh/open/` with its folder, terminal tab, caffeinate,
+proxy and launch flags, and a normal exit removes the record. `claudemeister ps` lists the open sessions with
+their state (waiting for you, working, idle) and jumps to the chosen one's tab in Terminal or iTerm2. After a
+reboot, a macOS update or a crash, `claudemeister restore` reopens the sessions whose records are left, each in
+its own window with `--resume`, the same mode, proxy and flags. Sessions started with `-i` aren't recorded.
 
 `claudemeister doctor` checks all of it in one go: Claude Code on PATH, the commands and whether they match this
 version, the hooks, transcript retention, the status line, the MCP server answering `tools/list`, the zsh hook,

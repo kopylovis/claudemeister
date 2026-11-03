@@ -43,6 +43,8 @@ claudemeister proxy                 прокси через VPS для отде�
 claudemeister guard                 спросит перед чтением или удалением ключей и необратимыми командами
 claudemeister humanize              писать без признаков нейросети: on, off, check <файл>, rules (/humanize)
 claudemeister notify                уведомления, когда Claude ждёт тебя (on, off, after <сек>, test, telegram)
+claudemeister ps                    открытые сессии Claude Code: кто ждет тебя, перейти во вкладку
+claudemeister restore               открыть заново сессии, открытые до перезагрузки или падения
 claudemeister doctor                проверить установку: команды, хуки, MCP, уведомления, promptsill, прокси
 claudemeister setup                 поставить /restart, хуки, MCP-сервер, хук zsh, прокси и promptsill
                                     (--country KZ для прокси, --remove убрать; подробнее: setup -h)
@@ -60,6 +62,8 @@ case "${1:-}" in
   proxy) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_proxy.py" "$@" ;;
   sessions) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_sessions.py" "$@" ;;
   brief) exec /usr/bin/python3 "$(dirname "$MENU")/claude_brief.py" "$@" ;;
+  ps) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_live.py" ps "$@" ;;
+  restore) exec /usr/bin/python3 "$(dirname "$MENU")/claude_live.py" "$@" ;;
   doctor) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_doctor.py" "$@" ;;
   parallel) exec /usr/bin/python3 "$(dirname "$MENU")/claude_parallel.py" "$@" ;;
   ask) exec /usr/bin/python3 "$(dirname "$MENU")/claude_ask.py" "$@" ;;
