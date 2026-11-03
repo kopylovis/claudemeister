@@ -63,7 +63,7 @@ HOOKS = [("SessionStart", "notice", False, None), ("SessionEnd", "session-end", 
          ("Notification", "notify-hook", True, None),
          ("PreToolUse", "guard-hook", False, "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep"),
          ("SessionStart", "humanize-hook", False, None), ("UserPromptSubmit", "humanize-hook", False, None),
-         ("Stop", "humanize-hook", True, None)]
+         ("Stop", "humanize-hook", True, None), ("PostToolUse", "buildlog-hook", False, "Bash")]
 STATUS_CMD = "statusline"
 LEGACY_CALL = re.compile(r"\bmnrh['\"]?\s+claude\s+\S")
 TTY = sys.stdout.isatty()

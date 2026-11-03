@@ -32,6 +32,7 @@ claudemeister shot [app]     screenshot of an app window; without arguments, a l
 claudemeister deps           outdated Gradle dependencies in libs.versions.toml
 claudemeister proxy          proxy through your own server for chosen sessions: setup, test, remove
 claudemeister guard          ask before reading or deleting keys and before destructive commands; on, off, test, log
+claudemeister buildlog       Claude sees a digest of long build and test output: on, off, test <file>
 claudemeister humanize       writing rules without the usual AI tells: on, off, check <file>, rules
 claudemeister notify         notifications when Claude is waiting for you: on, off, after <sec>, test, telegram
 ```
@@ -447,6 +448,25 @@ or "allow"), so guard holds the call and Claude asks you in the chat why it need
 "да", "давай") and the same call goes through. The answer is tied to that call and to your message after the
 question, so the model can't answer for you. `claudemeister guard skip destructive` turns a rule off,
 `guard test '<command>'` shows the decision, and `guard log` shows recent hits.
+
+### Long build output: `claudemeister buildlog`
+
+A Gradle or xcodebuild run easily prints thousands of lines, and all of them land in Claude's context. The
+`PostToolUse` hook for Bash looks at commands that run `./gradlew` or `gradle`, `xcodebuild`, `swift build` or
+`swift test`, `npm`/`pnpm`/`yarn` `test` or `build`, `pytest` or `make`. When the output is longer than 200 lines
+or 20 KB, Claude sees a digest instead: errors with a few lines around them, failed tasks and tests, warnings
+(one line per distinct warning, with a count of repeats), blocks like Gradle's "What went wrong" and xcodebuild's
+"The following build commands failed", summary lines (`BUILD SUCCESSFUL`, `** TEST FAILED **`, `Executed 120
+tests`) and the last lines. The first line of the digest names the full log in
+`~/.cache/mnrh/logs/<session>/<time>.log`, so Claude can grep it when the digest isn't enough. Logs are kept for
+7 days and are deleted together with the session by `/forget`.
+
+The output is replaced through `updatedToolOutput`, which Claude Code only accepts from `PostToolUse`, and that
+event fires only when the command exits with 0. When the build itself fails, Claude Code sends
+`PostToolUseFailure`, which can't change the output, so Claude sees it as before (Claude Code cuts anything
+past 30,000 characters). Commands like `./gradlew test --continue; echo "exit $?"` or `xcodebuild … | tee`
+exit with 0 and are shrunk even when the build fails. `claudemeister buildlog off` turns the hook off, `on`
+turns it back on, and `buildlog test <file>` shows what Claude would see for a saved log.
 
 ### Notifications when Claude is waiting for you
 

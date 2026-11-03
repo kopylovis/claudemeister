@@ -36,6 +36,11 @@ test:
 	@./bin/claudemeister setup -h | grep -q -- '--country'
 	@HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent-cm /usr/bin/python3 libexec/claudemeister/lib/claude_setup.py pending | grep -q '^fresh commands .*proxy promptsill$$'
 	@HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent-cm /usr/bin/python3 libexec/claudemeister/lib/claude_setup.py check </dev/null | wc -c | grep -q '^ *0$$'
+	@./bin/claudemeister buildlog -h | grep -q PostToolUse
+	@echo junk | ./bin/claudemeister buildlog-hook | wc -c | grep -q '^ *0$$'
+	@echo '{"tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":"x"}}' | ./bin/claudemeister buildlog-hook | wc -c | grep -q '^ *0$$'
+	@./bin/claudemeister buildlog test tests/fixtures/gradle-failure.log | grep -q 'BUILD FAILED in'
+	@./bin/claudemeister buildlog test tests/fixtures/xcodebuild-build-failure.log | grep -q "cannot find 'ItemRowView'"
 	@./bin/claudemeister guard >/dev/null
 	@./bin/claudemeister guard -h >/dev/null
 	@./bin/claudemeister humanize -h | grep -q ПРГЕН

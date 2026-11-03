@@ -109,6 +109,12 @@ class Pending(unittest.TestCase):
         # без settings.json хуки не проверить: не предлагаем
         self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE}), [])
 
+    def test_new_hook_after_update(self):
+        # установка до buildlog: хука PostToolUse нет, setup предлагают снова
+        settings = current_hooks()
+        del settings["hooks"]["PostToolUse"]
+        self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE, SETTINGS: settings}), ["hooks"])
+
     def test_retention_not_set(self):
         settings = current_hooks()
         del settings["cleanupPeriodDays"]

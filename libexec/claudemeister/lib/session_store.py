@@ -17,10 +17,11 @@ import claude_search  # noqa: E402
 CLAUDE = CLAUDE_HOME
 PROJECTS = os.path.join(CLAUDE, "projects")
 UUID = UUID_RE
-# что claudemeister хранит про сессию сам: резервные копии slim, последний ответ для уведомлений, humanize, guard
+# что claudemeister хранит про сессию сам: резервные копии slim, последний ответ для уведомлений, humanize, guard,
+# полные логи сборок (claudemeister buildlog)
 SESSION_CACHES = [os.path.join(CACHE, sub, "{sid}" + tail) for sub, tail in
                   (("slim-backup", ".*.jsonl.gz"), ("notify", ".json"), ("humanize", ".*"), ("guard", ".json"),
-                   ("notice", ".json"))]
+                   ("notice", ".json"), ("logs", "/*.log"))]
 
 
 def encode(path):
