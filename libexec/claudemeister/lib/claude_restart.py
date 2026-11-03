@@ -1114,7 +1114,7 @@ def setup_args(args):
 
 def mcp_get(name):
     """(подключен ли MCP-сервер name, [команда, аргументы...]) по выводу claude mcp get."""
-    r = subprocess.run(["claude", "mcp", "get", name], capture_output=True, text=True)
+    r = subprocess.run([CLAUDE_BIN, "mcp", "get", name], capture_output=True, text=True)
     if r.returncode != 0:
         return False, []
     command = re.search(r"^\s*Command:\s*(.+?)\s*$", r.stdout, re.M)
@@ -1135,7 +1135,7 @@ def remove_old_mcp(state=None):
     """Убрать MCP-сервер mnrh, если это наш старый mnrh claude mcp. Чужой сервер с тем же именем не трогает."""
     if (state or old_mcp()) != "ours":
         return False
-    subprocess.run(["claude", "mcp", "remove", "--scope", "user", OLD_MCP_NAME], capture_output=True)
+    subprocess.run([CLAUDE_BIN, "mcp", "remove", "--scope", "user", OLD_MCP_NAME], capture_output=True)
     return True
 
 
@@ -1147,12 +1147,17 @@ def setup(args):
     opts = setup_args(args)
     if opts is None:
         return 2
+    if not shutil.which(CLAUDE_BIN):
+        # без claude не зарегистрировать MCP-сервер, а setup бросил бы работу на полпути с traceback
+        print(f"claudemeister setup: не нашел {CLAUDE_BIN} в PATH. Поставь Claude Code "
+              "(https://docs.claude.com/en/docs/claude-code) и запусти setup снова", file=sys.stderr)
+        return 1
     if opts["remove"]:
         for f in [COMMAND_FILE, FORGET_FILE, FRESH_FILE, SLIM_FILE, OLD_FORGET_FILE] + \
                 [os.path.join(COMMANDS, f"{n}.md") for n in EXTRA_COMMANDS]:
             if os.path.exists(f):
                 os.remove(f)
-        subprocess.run(["claude", "mcp", "remove", "--scope", "user", MCP_NAME], capture_output=True)
+        subprocess.run([CLAUDE_BIN, "mcp", "remove", "--scope", "user", MCP_NAME], capture_output=True)
         remove_old_mcp()
         notice_hook(False)
         lines = zshrc_lines()
@@ -1194,13 +1199,13 @@ def setup(args):
         print(f"✓ MCP-сервер {OLD_MCP_NAME} (mnrh claude mcp) убран, его инструменты теперь у {MCP_NAME}")
     listed, registered = mcp_get(MCP_NAME)
     if listed and registered != [CM, "mcp"]:
-        subprocess.run(["claude", "mcp", "remove", "--scope", "user", MCP_NAME], capture_output=True)
+        subprocess.run([CLAUDE_BIN, "mcp", "remove", "--scope", "user", MCP_NAME], capture_output=True)
         print(f"✓ MCP-сервер {MCP_NAME} был подключён к {' '.join(registered) or '?'}, переключаю на {tilde(CM)} mcp")
         listed = False
     if listed:
         print(f"✓ MCP-сервер {MCP_NAME} уже подключён")
     else:
-        r = subprocess.run(["claude", "mcp", "add", "--scope", "user", MCP_NAME, "--", CM, "mcp"],
+        r = subprocess.run([CLAUDE_BIN, "mcp", "add", "--scope", "user", MCP_NAME, "--", CM, "mcp"],
                            capture_output=True, text=True)
         if r.returncode != 0:
             print(f"✗ не подключил MCP: {r.stderr.strip() or r.stdout.strip()}")

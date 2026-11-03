@@ -8,12 +8,14 @@ claudemeister перед запуском сверяет запись со STEPS
 """
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, HOOKS, LEGACY_CALL, OK, PROMPTSILL_HINT, WARN, promptsill_path, tilde  # noqa: E402
+from mnrhlib import (HOME, HOOKS, LEGACY_CALL, OK, PROMPTSILL_HINT, STATUS_CMD, WARN, is_hook,  # noqa: E402
+                     promptsill_path, tilde)
 
 STATE = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config"), "mnrh", "claude-setup.json")
 CLAUDE = os.environ.get("MNRH_CLAUDE_HOME", os.path.join(HOME, ".claude"))
@@ -211,6 +213,34 @@ def promptsill_step():
     return "done"
 
 
+def promptsill_statusline():
+    """promptsill поставлен вне полного setup: прописать его в statusLine, если там пусто или наша заглушка."""
+    path = os.path.join(CLAUDE, "settings.json")
+    try:
+        with open(path) as f:
+            settings = json.load(f)
+    except FileNotFoundError:
+        settings = {}
+    except ValueError:
+        print(f"{WARN} {tilde(path)} не читается как JSON, statusLine не трогаю. Поставь сам: promptsill install")
+        return
+    if not isinstance(settings, dict):
+        return
+    line = settings.get("statusLine")
+    if line and not is_hook(str(line.get("command", "")) if isinstance(line, dict) else "", STATUS_CMD):
+        return
+    settings["statusLine"] = {"type": "command", "command": shlex.quote(promptsill_path()), "padding": 0,
+                              "refreshInterval": 10}
+    os.makedirs(CLAUDE, exist_ok=True)
+    path = os.path.realpath(path)  # settings.json из dotfiles остается ссылкой
+    tmp = f"{path}.{os.getpid()}"
+    with open(tmp, "w") as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
+    print(f"{OK} строка состояния → statusLine (promptsill)")
+
+
 def check():
     """Перед запуском claudemeister: предложить setup, если его не делали или появились новые шаги."""
     if os.environ.get("MNRH_NO_SETUP_CHECK") or not (sys.stdin.isatty() and sys.stdout.isatty()):
@@ -242,6 +272,8 @@ def check():
     elif answer == "yes" and set(steps) <= ASKS:
         for step in steps:
             result = proxy_step() if step == "proxy" else promptsill_step()
+            if step == "promptsill" and result == "done" and promptsill_path():
+                promptsill_statusline()
             if result:
                 record(**{"done" if result == "done" else "skipped": [step]})
         print()
