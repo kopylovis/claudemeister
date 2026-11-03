@@ -64,7 +64,7 @@ def hooks(*rows):
 
 
 def current_hooks():
-    return hooks(*[(e, f"claudemeister {c}", m) for e, c, _, m in HOOKS])
+    return dict(hooks(*[(e, f"claudemeister {c}", m) for e, c, _, m in HOOKS]), cleanupPeriodDays=365)
 
 
 SETTINGS = ".claude/settings.json"
@@ -108,6 +108,13 @@ class Pending(unittest.TestCase):
         self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE, SETTINGS: settings}), ["hooks"])
         # без settings.json хуки не проверить: не предлагаем
         self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE}), [])
+
+    def test_retention_not_set(self):
+        settings = current_hooks()
+        del settings["cleanupPeriodDays"]
+        self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE, SETTINGS: settings}), ["hooks"])
+        settings["cleanupPeriodDays"] = 30
+        self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE, SETTINGS: settings}), [])
 
     def test_legacy_restart_command(self):
         files = {RESTART: LEGACY_MD, STATE: DONE, SETTINGS: current_hooks()}
@@ -193,6 +200,13 @@ class NoticeHook(unittest.TestCase):
         self.assertIn("mcp__claudemeister__session_read", data["permissions"]["allow"])
         _, back = self.run_hook(self.FOREIGN, "s.notice_hook(True); s.notice_hook(False)")
         self.assertEqual(back, self.FOREIGN)
+
+    def test_retention(self):
+        text, data = self.run_hook({})
+        self.assertEqual(data["cleanupPeriodDays"], 365)
+        self.assertIn("365 дней вместо 30", text)
+        text, data = self.run_hook({"cleanupPeriodDays": 90}, "s.notice_hook(True); s.notice_hook(False)")
+        self.assertEqual(data["cleanupPeriodDays"], 90)
 
     def test_empty_settings_round_trip(self):
         _, back = self.run_hook(None, "s.notice_hook(True); s.notice_hook(False)")

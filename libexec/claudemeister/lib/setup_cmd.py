@@ -68,6 +68,7 @@ def notice_hook(install, rename_rules=False):
         print(f"✗ {tilde(SETTINGS)} не читается как JSON ({e}), хуки Claude Code не трогаю")
         return
     claude_settings.ensure_hooks(settings, install)
+    retention = claude_settings.ensure_retention(settings, install)
     line = settings.get("statusLine")
     command = claude_settings.statusline_command(settings)
     ours = is_hook(command, STATUS_CMD) or "promptsill" in command
@@ -100,12 +101,16 @@ def notice_hook(install, rename_rules=False):
         print(f"✓ сообщения после /restart и /forget, удаление пустых сессий → хуки SessionStart и SessionEnd "
               f"в {tilde(SETTINGS)}")
         print(status_note)
-        print("✓ защита секретов: вопрос перед чтением и удалением ключей → хук PreToolUse (claudemeister guard)")
+        print("✓ guard: вопрос перед чтением и удалением ключей и перед необратимыми командами (reset --hard, "
+              "push --force, rm -r вне проекта…) → хук PreToolUse (claudemeister guard)")
         print("✓ уведомления, когда Claude ждёт тебя → хуки UserPromptSubmit, Stop и Notification "
               "(claudemeister notify -h)")
         print("✓ claudemeister humanization: правила письма без признаков нейросети → хуки SessionStart, UserPromptSubmit "
               "и Stop; включить: /humanize или claudemeister humanize on")
         print(f"✓ без вопроса о разрешении: {', '.join(READ_ONLY)} (они только читают)")
+        days = settings.get("cleanupPeriodDays")
+        print(f"✓ переписки хранятся {claude_settings.RETENTION_DAYS} дней вместо 30 → cleanupPeriodDays"
+              if retention else f"✓ переписки хранятся {days} дней (cleanupPeriodDays, твое значение)")
 
 
 SETUP_USAGE = """claudemeister setup [--country KZ] [--only <имя>]

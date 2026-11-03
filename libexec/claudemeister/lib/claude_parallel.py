@@ -90,7 +90,8 @@ def start(task, project=None, branch=None, mode="caffeinate", cwd=None, cm=None,
     if dirty:
         lines.append("В основной папке есть незакоммиченные изменения — в worktree их нет, он от последнего коммита.")
     lines.append(text)
-    lines.append(f"Потом: claudemeister parallel merge {name} — влить, drop {name} — выбросить.")
+    lines.append(f"Потом: claudemeister parallel pr {name} — через PR, merge {name} — влить локально, "
+                 f"drop {name} — выбросить.")
     return "\n".join(lines), bad
 
 
@@ -148,14 +149,29 @@ def listing(project=None, cwd=None):
     return "\n".join(lines), False
 
 
-def finish(branch, action, project=None, cwd=None):
+def pick(branch, project=None, cwd=None):
+    """-> (root, задача, ошибка)"""
     root, err = find_project(project, cwd)
     if err:
-        return err, True
+        return None, None, err
     match = [e for e in entries(root) if e["branch"] == branch or e["branch"].endswith("/" + branch)]
     if len(match) != 1:
-        return f"Нет параллельной задачи «{branch}». " + listing(project, cwd)[0], True
-    e = match[0]
+        return root, None, f"Нет параллельной задачи «{branch}». " + listing(project, cwd)[0]
+    return root, match[0], None
+
+
+def forget_task(root, e, delete="-D"):
+    """Убрать worktree, ветку и записи о задаче."""
+    subprocess.run(["git", "-C", root, "worktree", "remove", "--force", e["path"]], capture_output=True)
+    git(root, "branch", delete, e["branch"])
+    for key in ("mnrhBase", "mnrhTask"):
+        git(root, "config", "--unset", f"branch.{e['branch']}.{key}")
+
+
+def finish(branch, action, project=None, cwd=None):
+    root, e, err = pick(branch, project, cwd)
+    if err:
+        return err, True
     if e["running"]:
         return f"В {tilde(e['path'])} ещё работает Claude — сначала закрой его.", True
     if action == "merge":
@@ -171,13 +187,142 @@ def finish(branch, action, project=None, cwd=None):
         if r.returncode:
             subprocess.run(["git", "-C", root, "merge", "--abort"], capture_output=True)
             return f"Слить без конфликтов не вышло, слияние отменено:\n{(r.stdout + r.stderr).strip()[-1500:]}", True
-    subprocess.run(["git", "-C", root, "worktree", "remove", "--force", e["path"]], capture_output=True)
-    git(root, "branch", "-d" if action == "merge" else "-D", e["branch"])
-    for key in ("mnrhBase", "mnrhTask"):
-        git(root, "config", "--unset", f"branch.{e['branch']}.{key}")
+    forget_task(root, e, "-d" if action == "merge" else "-D")
     if action == "merge":
         return f"Влил {e['branch']} в {e['base']} ({e['ahead']} коммитов), worktree и ветку убрал. Пушить — сам.", False
     return f"Выбросил {e['branch']}: worktree и ветка удалены.", False
+
+
+# Сколько ждать, пока у свежего PR появятся проверки: GitHub Actions заводит их через несколько секунд
+CHECKS_APPEAR = 15
+CHECKS_APPEAR_ACTIONS = 90
+CI_TIMEOUT = 3 * 3600
+
+
+def gh(cwd, *args, timeout=120):
+    try:
+        return subprocess.run(["gh", *args], cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as ex:
+        return subprocess.CompletedProcess(ex.cmd, 124, "", f"gh не ответил за {timeout} с")
+
+
+def out_of(r, limit=1500):
+    return ((r.stdout or "") + (r.stderr or "")).strip()[-limit:]
+
+
+def github_repo(url):
+    """owner/repo (или host/owner/repo не на github.com) из адреса remote; None, если это не похоже на GitHub."""
+    m = re.match(r"^(?:[a-z+]+://)?(?:[^@/]+@)?([^/:]+)[:/]+([^/]+/[^/]+?)(?:\.git)?/*$", url or "")
+    if not m or "." not in m.group(1):
+        return None
+    host, path = m.groups()
+    return path if host == "github.com" else f"{host}/{path}"
+
+
+def pr_checks(repo, num, path, log):
+    """-> (есть ли проверки, прошли ли, текст про упавшие)"""
+    wait = CHECKS_APPEAR_ACTIONS if os.path.isdir(os.path.join(path, ".github", "workflows")) else CHECKS_APPEAR
+    deadline = time.time() + wait
+    while True:
+        r = gh(path, "pr", "checks", str(num), "-R", repo, "--json", "name,bucket,link")
+        try:
+            found = json.loads(r.stdout or "null")
+        except ValueError:
+            found = None
+        if isinstance(found, list) and found:
+            break
+        if "no checks reported" not in out_of(r) and not isinstance(found, list):
+            return True, False, f"gh pr checks не ответил: {out_of(r) or r.returncode}"
+        if time.time() >= deadline:
+            return False, True, ""
+        time.sleep(5)
+    log(f"Жду CI ({len(found)} проверок)…")
+    r = gh(path, "pr", "checks", str(num), "-R", repo, "--watch", "--fail-fast", "-i", "15", timeout=CI_TIMEOUT)
+    if r.returncode == 0:
+        return True, True, ""
+    r = gh(path, "pr", "checks", str(num), "-R", repo, "--json", "name,bucket,link")
+    try:
+        bad = [c for c in json.loads(r.stdout or "[]") if c.get("bucket") in ("fail", "cancel")]
+    except (ValueError, AttributeError):
+        bad = []
+    if not bad:
+        return True, False, out_of(r) or "gh pr checks --watch завершился с ошибкой"
+    return True, False, "\n".join(f"  {c.get('name')}: {c.get('bucket')} {c.get('link') or ''}".rstrip() for c in bad)
+
+
+def pr(branch, project=None, cwd=None, merge=True, log=None):
+    """Отправить ветку параллельной задачи в PR, дождаться CI, слить и убрать worktree. -> (текст, ошибка ли)"""
+    log = log or (lambda text: None)
+    root, e, err = pick(branch, project, cwd)
+    if err:
+        return err, True
+    name, base, path = e["branch"], e["base"], e["path"]
+    if e["running"]:
+        return f"В {tilde(path)} ещё работает Claude — сначала закрой его.", True
+    if e["dirty"]:
+        return f"В worktree незакоммичено файлов: {e['dirty']}. Сначала закоммить их там.", True
+    if e["ahead"] == "0":
+        return f"В {name} нет коммитов поверх {base}, отправлять нечего.", True
+    if not shutil.which("gh"):
+        return "Нужен GitHub CLI: brew install gh, потом gh auth login.", True
+    remote = git(root, "config", f"branch.{base}.remote") or "origin"
+    repo = github_repo(git(root, "config", f"remote.{remote}.url"))
+    if not repo:
+        return f"Remote {remote} проекта не на GitHub, PR не открыть.", True
+
+    r = subprocess.run(["git", "-C", root, "push", "--no-follow-tags", "-u", remote, f"refs/heads/{name}:refs/heads/{name}"],
+                       capture_output=True, text=True, timeout=300)
+    if r.returncode:
+        return f"Не запушил {name} в {remote}:\n{out_of(r)}", True
+    log(f"Запушил {name} в {remote}.")
+
+    r = gh(path, "pr", "list", "-R", repo, "--head", name, "--state", "open", "--json", "number,url")
+    try:
+        opened = json.loads(r.stdout or "[]")
+    except ValueError:
+        opened = []
+    if opened:
+        num, url = opened[0]["number"], opened[0]["url"]
+        log(f"PR уже открыт: {url}")
+    else:
+        r = gh(path, "pr", "create", "-R", repo, "--fill", "--base", base, "--head", name)
+        url = (r.stdout or "").strip().splitlines()[-1:] or [""]
+        url = url[0]
+        m = re.search(r"/pull/(\d+)", url)
+        if r.returncode or not m:
+            return f"Не открыл PR:\n{out_of(r)}", True
+        num = int(m.group(1))
+        log(f"Открыл PR: {url}")
+    if not merge:
+        return f"Ветка {name} в PR #{num}, сливать не стал. Worktree на месте: {tilde(path)}.", False
+
+    subprocess.run(["git", "-C", root, "fetch", "--no-tags", "-q", remote, base], capture_output=True, timeout=300)
+    ref = f"{remote}/{base}" if git(root, "rev-parse", "--verify", "--quiet", f"refs/remotes/{remote}/{base}") else base
+    how = "--merge" if git(root, "rev-list", "--merges", "-1", ref) else "--rebase"
+
+    has, ok, bad = pr_checks(repo, num, path, log)
+    if not ok:
+        return (f"CI по PR #{num} не прошёл, сливать не стал. Worktree оставил: {tilde(path)}.\n{bad}\n"
+                f"Почини там, закоммить и снова: claudemeister parallel pr {name}"), True
+    log("CI прошёл." if has else "Проверок у PR нет, сливаю сразу.")
+
+    r = gh(path, "pr", "merge", str(num), "-R", repo, how, "--delete-branch", timeout=300)
+    if r.returncode:
+        return f"PR #{num} не слился ({how}), worktree оставил:\n{out_of(r)}", True
+    forget_task(root, e)
+    git(root, "branch", "-d", "-r", f"{remote}/{name}")
+    lines = [f"Слил PR #{num} в {base} ({how[2:]}), ветку на GitHub удалил, worktree и локальную ветку убрал."]
+    subprocess.run(["git", "-C", root, "fetch", "--no-tags", "-q", remote, base], capture_output=True, timeout=300)
+    if git(root, "branch", "--show-current") != base:
+        lines.append(f"Основная папка не на {base}, её не трогал.")
+    elif git(root, "status", "--porcelain", "--untracked-files=no"):
+        lines.append(f"В основной папке есть незакоммиченные изменения, {base} не подтягивал: git pull --ff-only сам.")
+    else:
+        r = subprocess.run(["git", "-C", root, "merge", "--ff-only", "-q", f"{remote}/{base}"],
+                           capture_output=True, text=True)
+        lines.append(f"Подтянул {base} в основной папке." if not r.returncode else
+                     f"{base} в основной папке не подтягивается перемоткой: {out_of(r, 300)}")
+    return "\n".join(lines), False
 
 
 START_TOOL = {
@@ -207,10 +352,13 @@ LIST_TOOL = {
 FINISH_TOOL = {
     "name": "parallel_finish",
     "description": ("Закончить параллельную задачу: merge — влить её ветку в ветку, от которой она ответвлена "
-                    "(без пуша), drop — выбросить ветку и worktree. Только с согласия пользователя."),
+                    "(без пуша), drop — выбросить ветку и worktree, pr — запушить ветку, открыть PR в исходную "
+                    "ветку, дождаться CI, слить его и убрать worktree (no_merge: только открыть PR). pr может "
+                    "ждать CI долго. Только с согласия пользователя."),
     "annotations": {"destructiveHint": True},
     "inputSchema": {"type": "object", "properties": {
-        "branch": {"type": "string"}, "action": {"type": "string", "enum": ["merge", "drop"]},
+        "branch": {"type": "string"}, "action": {"type": "string", "enum": ["merge", "drop", "pr"]},
+        "no_merge": {"type": "boolean", "description": "для pr: только запушить и открыть PR, не сливать"},
         "project": {"type": "string"}}, "required": ["branch", "action"]},
 }
 TOOLS = [START_TOOL, LIST_TOOL, FINISH_TOOL]
@@ -222,6 +370,10 @@ def handle(name, a, cwd=None, cm=None):
                      a.get("permission_mode"), a.get("remote_control", True) is not False)
     if name == "parallel_list":
         return listing(a.get("project"), cwd)
+    if a.get("action") == "pr":
+        done = []
+        text, bad = pr(a.get("branch", ""), a.get("project"), cwd, merge=not a.get("no_merge"), log=done.append)
+        return "\n".join(done + [text]), bad
     return finish(a.get("branch", ""), a.get("action"), a.get("project"), cwd)
 
 
@@ -233,6 +385,8 @@ def main():
         print("claudemeister parallel list           параллельные задачи этого проекта")
         print("claudemeister parallel merge <ветка>  влить в исходную ветку (без пуша) и убрать worktree")
         print("claudemeister parallel drop <ветка>   выбросить ветку и worktree")
+        print("claudemeister parallel pr <ветка> [--no-merge]")
+        print("                         запушить, открыть PR в исходную ветку, дождаться CI, слить, убрать worktree")
         print()
         print(f"Worktree лежат в {tilde(os.path.join(projects_dir(), '.worktrees'))}/<проект>/. В Claude Code: /parallel.")
         return 0 if args else 2
@@ -244,7 +398,7 @@ def main():
             opts[args[i]] = args[i + 1]
             i += 2
             continue
-        if args[i] in ("-n", "--no-rc"):
+        if args[i] in ("-n", "--no-rc", "--no-merge"):
             opts[args[i]] = True
         else:
             rest.append(args[i])
@@ -253,6 +407,8 @@ def main():
         text, bad = listing(opts.get("-p"))
     elif rest[:1] in (["merge"], ["drop"]) and len(rest) == 2:
         text, bad = finish(rest[1], rest[0], opts.get("-p"))
+    elif rest[:1] == ["pr"] and len(rest) == 2:
+        text, bad = pr(rest[1], opts.get("-p"), merge=not opts.get("--no-merge"), log=lambda t: print(t, flush=True))
     else:
         from mnrhlib import CM
         text, bad = start(" ".join(rest), opts.get("-p"), opts.get("-b"), "normal" if opts.get("-n") else "caffeinate",

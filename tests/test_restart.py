@@ -73,5 +73,18 @@ class LightImports(unittest.TestCase):
         self.assertEqual(self.loaded("claude_restart") & (self.HEAVY - {"claude_restart", "claude_search"}), set())
 
 
+class Incognito(unittest.TestCase):
+    def test_restart_refuses_without_a_transcript(self):
+        import claude_restart
+        os.environ["CLAUDE_CODE_SKIP_PROMPT_HISTORY"] = "1"
+        try:
+            with self.assertRaises(claude_restart.RestartError):
+                claude_restart.plan()
+            with self.assertRaises(claude_restart.RestartError):
+                claude_restart.plan(slim=True)
+        finally:
+            del os.environ["CLAUDE_CODE_SKIP_PROMPT_HISTORY"]
+
+
 if __name__ == "__main__":
     unittest.main()

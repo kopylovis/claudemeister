@@ -100,6 +100,23 @@ def add_missing_hooks(settings, wanted):
     return [r[0] for r in added]
 
 
+# Claude Code удаляет переписки старше cleanupPeriodDays, по умолчанию через 30 дней. Поиск по сессиям
+# и /resume теряют все старше месяца, поэтому setup просит хранить год. Свое значение пользователя не трогаем.
+RETENTION_DAYS = 365
+
+
+def ensure_retention(settings, install=True):
+    """True, если записали cleanupPeriodDays (его не было). setup --remove убирает только наше значение."""
+    if not install:
+        if settings.get("cleanupPeriodDays") == RETENTION_DAYS:
+            settings.pop("cleanupPeriodDays")
+        return False
+    if "cleanupPeriodDays" in settings:
+        return False
+    settings["cleanupPeriodDays"] = RETENTION_DAYS
+    return True
+
+
 def statusline_command(settings):
     line = settings.get("statusLine")
     return str(line.get("command", "")) if isinstance(line, dict) else ""
