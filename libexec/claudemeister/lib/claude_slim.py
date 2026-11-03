@@ -166,6 +166,8 @@ def write_slim(src, dst, info, prot, rename=None):
     sid_re = re.compile(rb'"sessionId":"' + re.escape(rename[0].encode()) + rb'"') if rename else None
     with open(src, "rb") as fi, open(dst, "wb") as fo:
         for i, raw in enumerate(fi):
+            if i >= len(info):
+                raise SlimError("сессия изменилась во время сжатия, повтори")
             if sid_re:
                 raw = sid_re.sub(b'"sessionId":"' + rename[1].encode() + b'"', raw)
             if prot["flags"][i] or info[i].get("type") not in ("user", "attachment"):
@@ -257,6 +259,7 @@ def backup(path, sid, slim_size):
 
 
 def apply(path, sid, keep=2):
+    size = os.path.getsize(path)
     info = scan(path)
     prot = protection(info, keep)
     if not prot:
@@ -269,10 +272,11 @@ def apply(path, sid, keep=2):
             return stats
         verify(path, tmp, info, prot, keep)
         shutil.copystat(path, tmp)
-        stats["before"] = os.path.getsize(path)
+        # строки, дописанные после scan, в tmp не попали; заменить файл можно, только пока он того же размера
+        stats["before"] = size
         stats["after"] = os.path.getsize(tmp)
         stats["backup"] = backup(path, sid, stats["after"])
-        if os.path.getsize(path) != stats["before"]:
+        if os.path.getsize(path) != size:
             raise SlimError("сессия изменилась во время сжатия, повтори")
         os.replace(tmp, path)
     finally:
