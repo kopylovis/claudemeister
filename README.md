@@ -7,9 +7,6 @@
 секретов, уведомления, правила письма без признаков нейросети и MCP-сервер с инструментами
 для поиска по прошлым сессиям, бэклога, параллельных задач, снимков окон и заметок к релизу.
 
-Раньше это была команда `mnrh claude` из [mnrh](https://github.com/kopylovis/mnrh-utils). Теперь
-claudemeister ставится отдельно, а mnrh зависит от него, и `mnrh claude ...` вызывает `claudemeister ...`.
-
 ```
 claudemeister                меню: выбрать проект, сессии, прокси, humanization, setup
 claudemeister kcalm          сразу в проекте (достаточно начала имени)
@@ -54,20 +51,9 @@ Homebrew ставит заодно mihomo для `claudemeister -x`. `claudemeis
 Обновление: `brew upgrade claudemeister`. Убрать из Claude Code: `claudemeister setup --remove`.
 Удаление: `brew uninstall claudemeister`.
 
-### Переход с `mnrh claude`
-
-Настройки остаются на месте: claudemeister читает те же `~/.config/mnrh` и `~/.cache/mnrh`, что и раньше.
-Старые команды, хуки и MCP-сервер `mnrh` продолжают работать через `mnrh claude`. При первом запуске
-`claudemeister` (или `mnrh claude`) заметит их и предложит setup. Он перепишет хуки и команды на
-`claudemeister`, заменит MCP-сервер `mnrh` на `claudemeister` и перенесет разрешения
-`mcp__mnrh__*` в `mcp__claudemeister__*`. Чужие хуки и серверы setup не трогает.
-
-### С полным mnrh и без него
-
-Без mnrh не будет трех вещей. Это MCP-инструменты `mac_status` и `free_memory`, которые запускают `mnrh ram`
-и другие его команды, сон с закрытой крышкой в caffeinate-сессиях (`mnrh sleep lid`) и вопрос о папке
-проектов при первом запуске (`mnrh init`). Без него папка проектов `~/Developer`, другую задает строка
-`projects=<путь>` в `~/.config/mnrh/config` или `MNRH_PROJECTS=<путь>`.
+Папка проектов по умолчанию `~/Developer`, другую задает строка `projects=<путь>` в `~/.config/mnrh/config`
+или `MNRH_PROJECTS=<путь>`. Читающие MCP-инструменты (`session_search`, `session_read`, `deps_outdated`
+и другие) setup разрешает сразу в `permissions.allow` в `~/.claude/settings.json`.
 
 ### Из исходников, для разработки
 
@@ -119,11 +105,7 @@ macOS, bash и `/usr/bin/python3` из Xcode Command Line Tools (`xcode-select -
 
 `-k` и `-n` выбирают режим без вопроса, всё после `--` передаётся claude:
 `claudemeister kcalm -k -- --continue`. Закрытую крышку на батарее caffeinate не
-перебивает, это умеет только `pmset disablesleep 1` от root. Если стоит полный [mnrh](https://github.com/kopylovis/mnrh-utils), то после `mnrh sleep lid setup`
-(один раз, спросит пароль sudo) каждая caffeinate-сессия запускает сторожа: он держит
-`disablesleep`, пока жива хоть одна такая сессия, и снимает его через 2 минуты после
-последней или когда заряд падает до 15%. Mac с закрытой крышкой при этом работает
-в рюкзаке и греется, так что надолго лучше класть его открытым или подключать к сети.
+перебивает: Mac с закрытой крышкой без зарядки все равно уснет.
 
 ### Сессия через свой сервер: `claudemeister proxy`
 
@@ -342,23 +324,11 @@ Simulator, Android Studio, Figma, VS Code…), Claude смотрит на нег
 контекст текущей сессии. Модель по умолчанию — Sonnet; простой вопрос — около 30 тыс.
 токенов и 5–10 секунд.
 
-## Состояние Mac для Claude
-
-Эти два инструмента есть, только когда стоит полный [mnrh](https://github.com/kopylovis/mnrh-utils): они запускают его команды.
-MCP-инструмент `mac_status` показывает Claude то же, что `mnrh ram status`, `gradle status`, `sim status` и
-`ports` (по запросу ещё `disk status`): кто занял память, демоны Gradle и Kotlin, размеры кешей и
-`build/`, запущенные симуляторы, занятые порты. Когда сборка падает по памяти или порт
-занят, Claude может посмотреть сам. `free_memory` — это `mnrh ram clean`: останавливает
-простаивающие демоны сборки и симуляторы (по желанию эмулятор Android). Claude Code
-спрашивает разрешение перед каждым его вызовом, а читающие инструменты (`session_search`,
-`session_read`, `mac_status`, `deps_outdated`) `claudemeister setup` разрешает сразу в `permissions.allow`
-в `~/.claude/settings.json`.
-
 ## Как работает перезапуск Claude Code
 
 `claudemeister setup` кладёт `~/.claude/commands/restart.md`, `forget.md`, `fresh.md` и `slim.md` и регистрирует
 MCP-сервер `claudemeister` с инструментами `restart`, `forget`, `fresh`, `slim`, `open_claude`, `session_search`,
-`session_read`, `mac_status` и `free_memory` (scope user, во всех проектах). Дальше в любой сессии:
+`session_read` и другими (scope user, во всех проектах). Дальше в любой сессии:
 
 - `/restart` — сразу, без участия модели; `/restart --no-update` — без обновления;
 - или попросить Claude «перезапустись» / «обновись» — он вызовет инструмент `restart`;
@@ -420,9 +390,9 @@ MCP-сервер `claudemeister` с инструментами `restart`, `forge
 
 ### Строка состояния
 
-Строка состояния теперь отдельная открытая программа
+Строку состояния рисует отдельная открытая программа
 [promptsill](https://github.com/kopylovis/promptsill). Если ее нет, `claudemeister setup` предлагает поставить ее
-через Homebrew (`brew install kopylovis/tap/promptsill`), полный mnrh ставит ее сам. setup прописывает ее в `statusLine`,
+через Homebrew (`brew install kopylovis/tap/promptsill`) и прописывает ее в `statusLine`,
 если своей строки ещё нет, и заменяет прежнюю `claudemeister statusline`. Две строки под вводом:
 
 ```
@@ -475,9 +445,6 @@ Terminal и iTerm2 (по tty, как `/restart`), а в Android Studio, VS Code 
 Показывает их маленькое приложение `~/Library/Application Support/claudemeister/claudemeister Notify.app`
 (собирается из `share/claudemeister/notify/main.swift`). В первый раз macOS спросит, можно ли ему
 показывать уведомления, а при первом нажатии — можно ли ему управлять Terminal или iTerm2.
-До claudemeister 1.2 оно называлось mnrh Notify. После обновления новое приложение соберется при первом
-уведомлении, старое удалится, и macOS снова спросит разрешение. Строку mnrh Notify в настройках уведомлений
-можно удалить вручную.
 `claudemeister notify test` — пробное уведомление, `notify off` / `on` — выключить и
 включить, `notify sound off` — без звука.
 
