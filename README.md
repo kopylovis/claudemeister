@@ -48,6 +48,9 @@ and the other commands into `~/.claude/commands`, hooks into `~/.claude/settings
 to do it now (`--country KZ` sets the expected exit country). If the
 [promptsill](https://github.com/kopylovis/promptsill) status line is missing, it offers to install it with Homebrew.
 
+Claude Code deletes transcripts older than `cleanupPeriodDays`, 30 days by default, and with them goes everything
+`session_search` and `/resume` could find. setup sets it to 365 unless you already have your own value.
+
 setup records the steps it has done in `~/.config/mnrh/claude-setup.json`. If you run `claudemeister` before
 setup, or after an update that added a setup step, it lists what isn't configured and offers to do it. "Не
 предлагать" (don't offer) stops asking about those steps; `claudemeister setup` still configures them.
