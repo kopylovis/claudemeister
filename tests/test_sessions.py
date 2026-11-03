@@ -97,5 +97,85 @@ class Parallel(unittest.TestCase):
         self.assertEqual(r.stdout.split(), ["False", "True", "False"], r.stderr)
 
 
+SESSIONS = """
+    import json, os, re, time
+    home = os.environ["HOME"]
+    proj = os.path.join(home, "proj")
+    os.makedirs(proj)
+    pdir = os.path.join(home, ".claude", "projects", re.sub("[^A-Za-z0-9]", "-", proj))
+    os.makedirs(pdir)
+    ids = {"real": "11111111-2222-3333-4444-555555555555", "junk": "22222222-2222-3333-4444-555555555555",
+           "other": "33333333-2222-3333-4444-555555555555"}
+    def write(sid, lines):
+        with open(os.path.join(pdir, sid + ".jsonl"), "w") as f:
+            f.writelines(json.dumps(l, separators=(",", ":")) + "\\n" for l in lines)
+    user = {"type": "user", "cwd": proj, "gitBranch": "main", "message": {"content": "fix it"}}
+    write(ids["real"], [user, {"type": "assistant", "message": {"content": [{"type": "text", "text": "done"}]}},
+                        {"type": "ai-title", "aiTitle": "Fixing"}])
+    write(ids["other"], [user, {"type": "assistant", "message": {"content": [{"type": "text", "text": "done"}]}}])
+    write(ids["junk"], [{"type": "user", "message": {"content": "<command-name>/model</command-name>"}}])
+    os.makedirs(os.path.join(pdir, ids["real"], "subagents"))
+    open(os.path.join(pdir, ids["real"], "subagents", "a.jsonl"), "w").write("{}\\n")
+    old = time.time() - 3600
+    for sid in ids.values():
+        os.utime(os.path.join(pdir, sid + ".jsonl"), (old, old))
+"""
+
+
+def with_sessions(code):
+    return in_sandbox(textwrap.dedent(SESSIONS) + textwrap.dedent(code))
+
+
+class Lookup(unittest.TestCase):
+    def test_by_id_matches_load(self):
+        r, _ = with_sessions("""
+            import claude_sessions as s
+            full = {x["id"]: x for x in s.load()}
+            for sid in ids.values():
+                assert s.by_id(sid) == [full[sid]], sid
+                quick = s.by_id(sid, meta=False)[0]
+                assert all(quick[k] == full[sid][k] for k in ("id", "pdir", "path", "extra", "link", "size", "cwd")), sid
+            print(full[ids["real"]]["title"], s.by_id("nope"), s.by_id("44444444-2222-3333-4444-555555555555"))
+        """)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.split(), ["Fixing", "[]", "[]"])
+
+    def test_forget_and_drop_junk_touch_only_their_session(self):
+        r, _ = with_sessions("""
+            import claude_restart as cr
+            print(cr.drop_junk(os.path.join(pdir, ids["real"] + ".jsonl"), "test"))
+            print(cr.drop_junk(os.path.join(pdir, ids["junk"] + ".jsonl"), "test"))
+            print(cr.forget_session(ids["real"]), cr.forget_session(ids["real"]))
+            print(sorted(os.listdir(pdir)))
+        """)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines(), ["False", "True", "True False",
+                                                 "['33333333-2222-3333-4444-555555555555.jsonl']"])
+
+    def test_sweep_removes_old_junk_only(self):
+        r, _ = with_sessions("""
+            import claude_restart as cr
+            cr.sweep(pdir, ids["other"])
+            print(sorted(os.listdir(pdir)))
+        """)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("22222222", r.stdout)
+        self.assertIn("11111111-2222-3333-4444-555555555555.jsonl", r.stdout)
+
+    def test_last_session_survives_a_vanishing_file(self):
+        r, _ = with_sessions("""
+            import claude_brief as b
+            real = os.path.getmtime
+            def flaky(p):
+                if ids["other"] in p:
+                    raise FileNotFoundError(p)
+                return real(p)
+            b.os.path.getmtime = flaky
+            print(b.last_session(proj, proj)[0])
+        """)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.strip(), "11111111-2222-3333-4444-555555555555")
+
+
 if __name__ == "__main__":
     unittest.main()

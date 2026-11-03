@@ -262,8 +262,8 @@ def drop_junk(path, why):
     sid = os.path.basename(path)[:-6]
     if os.path.islink(path) or sid in claude_sessions.running_ids() or not claude_sessions.is_junk(path):
         return False
-    for s in claude_sessions.load():
-        if s["id"] == sid and not s["link"]:
+    for s in claude_sessions.by_id(sid, meta=False):
+        if not s["link"]:
             s["running"] = None
             claude_sessions.delete(s)
             log(f"пустая сессия {sid} удалена ({why})")
@@ -380,14 +380,15 @@ def notice():
 
 def forget_session(sid):
     import claude_sessions
-    for s in claude_sessions.load():
-        if s["id"] == sid:
-            s["running"] = None
-            claude_sessions.delete(s)
-            log(f"forget: удалил {sid}")
-            return True
-    log(f"forget: сессии {sid} не нашёл")
-    return False
+    found = claude_sessions.by_id(sid, meta=False)
+    if not found:
+        log(f"forget: сессии {sid} не нашёл")
+        return False
+    s = found[0]
+    s["running"] = None
+    claude_sessions.delete(s)
+    log(f"forget: удалил {sid}")
+    return True
 
 
 def detach(p, delay):

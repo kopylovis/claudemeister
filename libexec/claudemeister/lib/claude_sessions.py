@@ -193,6 +193,39 @@ def is_junk(path):
     return True
 
 
+_DECODE = object()
+
+
+def entry(path, running=None, home=_DECODE, meta=True):
+    """Сессия по пути к ее .jsonl, в том виде, как ее отдает load(). home: папка проекта, если уже известна.
+    meta=False не читает сам файл: cwd берется по имени папки, title, branch и answered пустые."""
+    pdir, name = os.path.split(path)
+    d, sid = os.path.basename(pdir), name[:-6]
+    if home is _DECODE:
+        home = decode(d)
+    link = os.path.islink(path)
+    m = read_meta(path) if meta else {"cwd": None, "branch": None, "custom": None, "ai": None, "prompt": None,
+                                      "answered": False}
+    extra = os.path.join(pdir, sid)
+    custom = m["custom"]
+    if meta:
+        try:
+            with open(os.path.join(extra, "custom-title.json")) as fh:
+                custom = json.load(fh).get("customTitle") or custom
+        except (OSError, ValueError, AttributeError):
+            pass
+    return {
+        "id": sid, "pdir": pdir, "path": path, "extra": extra, "link": link,
+        "target": os.path.realpath(path) if link else None,
+        "cwd": home or m["cwd"] or d, "started_in": m["cwd"], "branch": m["branch"],
+        "title": custom or m["ai"] or m["prompt"] or "",
+        "prompt": m["prompt"], "answered": m["answered"],
+        "size": 0 if link else os.lstat(path).st_size + tree_size(extra),
+        "mtime": os.stat(path).st_mtime,
+        "running": (running or {}).get(sid),
+    }
+
+
 def load():
     running = running_ids()
     out = []
@@ -206,32 +239,25 @@ def load():
             continue
         home = decode(d)
         for f in os.listdir(pdir):
-            sid = f[:-6]
-            if not f.endswith(".jsonl") or not UUID.match(sid):
-                continue
             path = os.path.join(pdir, f)
-            if not os.path.exists(path):
+            if not f.endswith(".jsonl") or not UUID.match(f[:-6]) or not os.path.exists(path):
                 continue
-            link = os.path.islink(path)
-            meta = read_meta(path)
-            extra = os.path.join(pdir, sid)
-            custom = meta["custom"]
-            try:
-                with open(os.path.join(extra, "custom-title.json")) as fh:
-                    custom = json.load(fh).get("customTitle") or custom
-            except (OSError, ValueError, AttributeError):
-                pass
-            cwd = home or meta["cwd"] or d
-            out.append({
-                "id": sid, "pdir": pdir, "path": path, "extra": extra, "link": link,
-                "target": os.path.realpath(path) if link else None,
-                "cwd": cwd, "started_in": meta["cwd"], "branch": meta["branch"],
-                "title": custom or meta["ai"] or meta["prompt"] or "",
-                "prompt": meta["prompt"], "answered": meta["answered"],
-                "size": 0 if link else os.lstat(path).st_size + tree_size(extra),
-                "mtime": os.stat(path).st_mtime,
-                "running": running.get(sid),
-            })
+            out.append(entry(path, running, home))
+    out.sort(key=lambda s: s["mtime"], reverse=True)
+    return out
+
+
+def by_id(sid, meta=True):
+    """Сессии с этим id (обычно одна) без чтения остальных, новые первыми. Пусто, если id не UUID."""
+    if not UUID.match(sid or ""):
+        return []
+    running = running_ids()
+    out = []
+    for path in glob.glob(os.path.join(glob.escape(PROJECTS), "*", sid + ".jsonl")):
+        try:
+            out.append(entry(path, running, meta=meta))
+        except OSError:  # битая ссылка или файл только что удалили
+            pass
     out.sort(key=lambda s: s["mtime"], reverse=True)
     return out
 
