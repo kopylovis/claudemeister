@@ -64,6 +64,9 @@ test:
 	@printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | ./bin/claudemeister mcp | grep -q '"deps_outdated"'
 	@./bin/claudemeister notify >/dev/null
 	@echo junk | ./bin/claudemeister notify-hook | wc -c | grep -q '^ *0$$'
+	@echo junk | ./bin/claudemeister approve-hook | wc -c | grep -q '^ *0$$'
+	@echo '{"session_id":"00000000-0000-0000-0000-000000000000","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}' | XDG_CONFIG_HOME=/nonexistent-cm ./bin/claudemeister approve-hook | wc -c | grep -q '^ *0$$'
+	@XDG_CONFIG_HOME=/nonexistent-cm ./bin/claudemeister notify telegram approve | grep -q 'approve on'
 	@echo '{"session_id":"00000000-0000-0000-0000-000000000000","hook_event_name":"UserPromptSubmit","user_input":"x"}' | ./bin/claudemeister notify-hook | wc -c | grep -q '^ *0$$'
 	@./bin/claudemeister -h >/dev/null
 	@./bin/claudemeister sessions -h >/dev/null
