@@ -12,6 +12,7 @@ import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mnrhlib import HOOKS, STATUS_CMD  # noqa: E402,F401
 from mnrhlib import CM, HOME, MNRH, PROMPTSILL_HINT, ROOT, hook_command, is_hook, promptsill_path, settings_path, tilde
 import claude_mac
 import claude_open
@@ -998,14 +999,6 @@ def write_zshrc(lines):
         f.writelines(lines)
 
 
-# (событие, команда claudemeister, async, matcher). Старые хуки mnrh claude <команда> setup заменяет этими.
-HOOKS = [("SessionStart", "notice", False, None), ("SessionEnd", "session-end", False, None),
-         ("UserPromptSubmit", "notify-hook", True, None), ("Stop", "notify-hook", True, None),
-         ("Notification", "notify-hook", True, None),
-         ("PreToolUse", "guard-hook", False, "Bash|Read|Edit|Write|MultiEdit|NotebookEdit"),
-         ("SessionStart", "humanize-hook", False, None), ("UserPromptSubmit", "humanize-hook", False, None),
-         ("Stop", "humanize-hook", True, None)]
-STATUS_CMD = "statusline"
 
 
 def rename_rule(rule):
