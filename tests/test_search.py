@@ -39,8 +39,8 @@ write(C, [line("user", "соединение через прокси не нуж
 """
 
 
-def run(code):
-    r, _ = in_sandbox(SETUP + textwrap.dedent(code))
+def run(code, extra=""):
+    r, _ = in_sandbox(SETUP + extra + textwrap.dedent(code))
     if r.returncode:
         raise AssertionError(r.stderr)
     return r.stdout
@@ -74,6 +74,22 @@ class Stemmer(unittest.TestCase):
     def test_spans_point_at_the_original_words(self):
         text = "Прокси-Соединения, ок"
         self.assertEqual([text[a:b] for _, a, b in stemmer.spans(text)], ["Прокси", "Соединения", "ок"])
+
+
+ERRORS = """
+D = "dddddddd-0000-0000-0000-000000000000"
+def result(text, is_error):
+    return {"type": "user", "timestamp": "2026-11-01T10:00:00.000Z",
+            "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "x", "content": text,
+                                                     "is_error": is_error}]}}
+long_error = "Exit code 1\\n" + "строка лога\\n" * 300 + "Execution failed: NoSuchMethodError в конце"
+write(D, [{"type": "assistant", "timestamp": "2026-11-01T10:00:00.000Z", "message": {"role": "assistant",
+           "content": [{"type": "tool_use", "name": "Bash", "input": {"command": "./gradlew build"}}]}},
+          result(long_error, True),
+          result("BUILD SUCCESSFUL обычный вывод квазар", False),
+          result([{"type": "text", "text": "<tool_use_error>File has not been read yet. Read it first</tool_use_error>"}], True),
+          result("Permission for this action was denied by the user квазар", True)])
+"""
 
 
 class Search(unittest.TestCase):
@@ -129,6 +145,18 @@ class Search(unittest.TestCase):
             print(os.path.exists(cs.terms_path(A)), os.path.exists(cs.index_path(A)))
         """).split()
         self.assertEqual(out, ["2", "2", "True", "3", "False", "True", "1", "False", "False"])
+
+    def test_tool_errors_are_indexed_and_output_is_not(self):
+        out = run("""
+            idx = cs.refresh()
+            msgs = idx[D]["msgs"]
+            print([m[0] for m in msgs])
+            print(len(msgs[1][2]) < 1700, msgs[1][2].startswith("Exit code 1"), msgs[1][2].endswith("в конце"))
+            print("dddddddd" in cs.search("NoSuchMethodError", roles=["error"])[0],
+                  "dddddddd" in cs.search("NoSuchMethodError", roles=["user"])[0],
+                  "dddddddd" in cs.search("квазар")[0])
+        """, ERRORS).splitlines()
+        self.assertEqual(out, ["['tool', 'error']", "True True True", "True False False"])
 
     def test_read_with_query(self):
         out = run("""

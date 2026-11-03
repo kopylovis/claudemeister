@@ -221,8 +221,12 @@ the images and full long outputs in that old part of the conversation.
 
 The same search is available to Claude as the MCP tools `session_search` and `session_read`. Ask "how did we
 set up RuStore signing in sightra?" and Claude finds it in past sessions and reads the right spot. The index
-covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools) and
-the summaries after `/compact`. Tool outputs and system messages aren't indexed. All words must appear in one
+covers your prompts, Claude's answers, the commands it ran (`$ …`, or the file or pattern for other tools), the
+errors those tools returned and the summaries after `/compact`. Normal tool output and system messages aren't
+indexed. Of a long error only the first 600 and the last 900 characters are kept, and Claude Code's own refusals
+(permission denied, "read the file first") are skipped. `roles=["error"]` (in the terminal
+`claudemeister sessions search -r error <words>`) searches errors only, to find how the same error was fixed
+before. All words must appear in one
 message (if no message has them all, messages with at least half of them are shown). Case and word form don't
 matter: words are reduced to their stems (a Snowball stemmer for Russian, the first Porter steps for English),
 so `сессия` finds `сессии` and `signing` finds `signed`. Hyphens split words, and a hyphenated word or a phrase in
