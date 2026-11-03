@@ -69,6 +69,9 @@ class LightImports(unittest.TestCase):
     def test_proc_and_slash_are_light(self):
         self.assertEqual(self.loaded("claude_proc, slash") & self.HEAVY, set())
 
+    def test_restart_does_not_load_mcp_server(self):
+        self.assertEqual(self.loaded("claude_restart") & (self.HEAVY - {"claude_restart", "claude_search"}), set())
+
 
 if __name__ == "__main__":
     unittest.main()
