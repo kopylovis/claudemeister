@@ -284,7 +284,7 @@ the text from `notes:` or `RELEASE_NOTES`, so the answer ends with a ready comma
 
 ## Parallel tasks
 
-`/parallel <task>` (or "do this in parallel") creates a `mnrh/<from the task>` branch and a git worktree from
+`/parallel <task>` (or "do this in parallel") creates a `parallel/<from the task>` branch and a git worktree from
 the current commit in `~/Developer/.worktrees/<project>/`, copies the untracked `local.properties`, `.env*` and
 `fastlane/.env*` into it, and opens a second Claude with the task and Remote Control in a new Terminal or iTerm2
 window. It works only in its own folder and commits to its own branch without merging or pushing. The

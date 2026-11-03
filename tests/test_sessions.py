@@ -84,5 +84,18 @@ class Statusline(unittest.TestCase):
         self.assertEqual(self.run_case({"statusLine": mine}), mine)
 
 
+class Parallel(unittest.TestCase):
+    def test_running_in_matches_whole_folders(self):
+        r, _ = in_sandbox("""
+            import json, os, claude_parallel as p
+            d = os.path.join(os.environ["HOME"], ".claude", "sessions")
+            os.makedirs(d)
+            json.dump({"pid": os.getpid(), "cwd": "/w/app-fix-login"}, open(os.path.join(d, "1.json"), "w"))
+            json.dump({"cwd": "/w/app-drop"}, open(os.path.join(d, "2.json"), "w"))
+            print(p.running_in("/w/app-fix"), p.running_in("/w/app-fix-login"), p.running_in("/w/app-drop"))
+        """)
+        self.assertEqual(r.stdout.split(), ["False", "True", "False"], r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
