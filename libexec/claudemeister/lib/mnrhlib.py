@@ -22,7 +22,9 @@ def hook_command(sub):
 def is_hook(command, sub):
     """Хук claudemeister <sub> или старый, из mnrh: mnrh claude <sub>."""
     # после имени может стоять кавычка: shlex.quote берет в кавычки путь с пробелом
-    return re.search(rf"(?:\bclaude|claudemeister)['\"]?\s+{re.escape(sub)}(?:\s|$)", command or "") is not None
+    # только программа с именем claudemeister или mnrh claude; ~/bin/my-claude notice чужой, его не трогаем
+    return re.search(rf"(?:\bmnrh['\"]?\s+claude|(?:^|[/\s'\"])claudemeister)['\"]?\s+{re.escape(sub)}(?:\s|$)",
+                     command or "") is not None
 
 
 # Хук или statusLine, которые ставил mnrh claude setup: .../mnrh claude <команда>

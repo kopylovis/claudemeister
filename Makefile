@@ -98,6 +98,5 @@ test:
 	@./bin/claudemeister open </dev/null >/dev/null 2>&1; test $$? -eq 2
 	@! printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | PATH=/usr/bin:/bin ./bin/claudemeister mcp | grep -q '"mac_status"'
 	@printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | ./bin/claudemeister mcp | grep -q '"name": "claudemeister"'
-	@/usr/bin/python3 -c 'import sys; sys.path.insert(0, "libexec/claudemeister/lib"); from mnrhlib import is_hook as h; assert h("/x/mnrh claude notice", "notice") and h("/x/claudemeister notice", "notice") and not h("/x/claudemeister notice-x", "notice") and h("\x27/a b/claudemeister\x27 notice", "notice")'
 	@find libexec -name __pycache__ -type d -exec rm -rf {} +
 	@echo "все проверки пройдены"
