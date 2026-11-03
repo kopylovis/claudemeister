@@ -515,6 +515,15 @@ Mac, `phone always` every time, `phone off` to turn it off, `phone test` for a t
 channel, and questions and permission requests use high priority. On the phone, add the `claude` channel in
 Tossling's notification settings.
 
+With Remote Control, Claude Code pushes to the Claude app on your phone itself. If the session is connected
+(`/remote-control`, `--remote-control` or "Enable Remote Control for all sessions") and **Push when actions
+required** is on in `/config` (`inputNeededNotifEnabled`), claudemeister doesn't send permission requests and
+questions to Telegram or Tossling for that session, so they don't arrive twice; the Mac notification stays.
+claudemeister sees the connection through `CLAUDE_CODE_BRIDGE_SESSION_ID`, which Claude Code v2.1.199 and later
+sets in hook commands while Remote Control is connected. "Done" and "waiting for you" still go out as before:
+Claude sends its own push for those only when it decides to. If `/config` shows "No mobile registered",
+open the Claude app on the phone, or turn the toggle off to get these through claudemeister again.
+
 The claudemeister Notify icon is `share/claudemeister/icon.png`, 1024×1024 (a rounded copy for the README is in
 `docs/icon.png`). It fills the whole square with no transparency: macOS 26 rounds it itself and puts an icon with
 margins or transparent corners on a gray plate. The build turns the PNG into `AppIcon.icns`, and the helper app
