@@ -1,8 +1,8 @@
-<img src="docs/icon.png" width="128" alt="claudemeister icon" align="right">
+<p align="center"><img src="docs/icon.png" width="128" alt="claudemeister icon"></p>
 
-# claudemeister
+<h1 align="center">claudemeister</h1>
 
-[English](README.md) · Русский
+<p align="center"><a href="README.md">English</a> · Русский</p>
 
 Обвязка для [Claude Code](https://code.claude.com) на macOS: запуск в проекте с выбором сессии,
 перезапуск и сжатие сессии изнутри Claude, прокси через свой сервер для отдельных сессий, защита
