@@ -793,8 +793,9 @@ HANDLERS = {
     "open_claude": lambda a: claude_open.open_claude(a, CM),
     "session_search": lambda a: claude_search.handle("session_search", a, current_sid()),
     "session_read": lambda a: claude_search.handle("session_read", a),
-    "mac_status": lambda a: claude_mac.handle("mac_status", a, MNRH),
-    "free_memory": lambda a: claude_mac.handle("free_memory", a, MNRH),
+    # без полного mnrh этих инструментов нет и в tools/list
+    **({"mac_status": lambda a: claude_mac.handle("mac_status", a, MNRH),
+        "free_memory": lambda a: claude_mac.handle("free_memory", a, MNRH)} if MNRH else {}),
     "deps_outdated": lambda a: gradle_deps.handle(a),
     "todo_list": lambda a: mnrh_todo.handle("todo_list", a, os.getcwd()),
     "todo_add": lambda a: mnrh_todo.handle("todo_add", a, os.getcwd()),
@@ -827,6 +828,8 @@ def mcp():
         try:
             req = json.loads(line)
         except ValueError:
+            continue
+        if not isinstance(req, dict):  # пакеты JSON-RPC (массивы) MCP не использует, а падать из-за них нельзя
             continue
         rid, method = req.get("id"), req.get("method")
         if rid is None:

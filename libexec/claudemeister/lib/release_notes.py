@@ -126,13 +126,25 @@ def context(project=None, since=None, cwd=None):
     return "\n".join(lines), False
 
 
+LOCALE = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,4})?$")
+VERSION = re.compile(r"^[\w.+-]{1,40}$")
+
 def write(project=None, version=None, notes=None, version_code=None, cwd=None):
     root, err = find_project(project, cwd)
     if err:
         return err, True
     if not isinstance(notes, dict) or not notes:
         return "Нужен notes: {\"ru-RU\": \"…\", \"en-US\": \"…\"}", True
+    # из этих значений собираются пути; без проверки "../../x" записал бы файл вне fastlane/
+    bad = [loc for loc, text in notes.items() if not LOCALE.match(str(loc)) or not isinstance(text, str)]
+    if bad:
+        return f"В notes ключи вида ru-RU или en-US, значения строками; не подходят: {', '.join(map(str, bad))}", True
     version = version or app_version(root)[0] or time.strftime("%Y%m%d")
+    if not VERSION.match(str(version)):
+        return f"Версия {version!r} не похожа на номер версии: нужны цифры, буквы, точки, +, - или _", True
+    if version_code is not None and not re.match(r"^\d{1,10}$", str(version_code)):
+        return f"version_code {version_code!r} не число", True
+    version = str(version)
     too_long = [f"{loc}: {len(t)} символов" for loc, t in notes.items() if len(t) > LIMITS["play"]]
     out_dir = os.path.join(root, NOTES_DIR)
     os.makedirs(out_dir, exist_ok=True)
