@@ -101,7 +101,8 @@ MARKERS = [
     ("разделитель ---", r"(?m)^\s*(?:-{3,}|\*{3,}|_{3,})\s*$"),
     ("термин — пояснение в списке", r"(?m)^\s*(?:[-*•]|\d+[.)])\s+[^\n—]{0,60}\s—\s"),
     ("эмодзи", "[\U0001F300-\U0001FAFF☀-⛿✅✔✨❌⭐➡]"),
-    ("пафос", r"!(?:\s|$)|(?:^|\n)\s*(?:и\s+вот\s+главное|самое\s+интересное|вот\s+в\s+ч[её]м\s+фишка)\b"),
+    # одиночный "!" не маркер: по Graphite AI Tells люди ставят его в 100 с лишним раз чаще моделей
+    ("пафос", r"!{2,}|(?:^|\n)\s*(?:и\s+вот\s+главное|самое\s+интересное|вот\s+в\s+ч[её]м\s+фишка)\b"),
 ]
 MARKERS += [
     ("вступление-штамп", S + r"\s*(?:в\s+современном\s+мире|в\s+наши\s+дни|в\s+эпоху\s+цифров|не\s+секрет,\s+что|ни\s+для\s+кого\s+не\s+секрет"
@@ -152,10 +153,36 @@ MARKERS += [
     ("переход-шаблон", S + r"\s*(?:кроме\s+того|более\s+того|помимо\s+этого|к\s+тому\s+же|moreover|furthermore|additionally|that\s+being\s+said"
                        r"|notably|interestingly|importantly)\b"),
     ("история правки в тексте", r"\b(?:was\s+added\s+to\s+replace|previously\s+used)|\bбыл\w*\s+добавлен\w*,?\s+чтобы\s+заменить"),
-    ("символы вместо слов", r"\s(?:→|->|=>|≈)\s"),
+    ("символы вместо слов", r"\s(?:→|->|=>|≈|⇒|←|↔)\s|≠"),
+]
+# Пополнение 2026-11: Graphite "AI Tells", хайлайтер Simon Willison, новые разделы WP:AISIGNS
+MARKERS += [
+    ("обещание без цены", r"\bне\s+жертвуя\b|\bбез\s+ущерба\s+для\b|\bбез\s+потери\s+(?:качества|скорости|производительности"
+                          r"|надежности|гибкости)|\bwithout\s+(?:sacrificing|compromising)\b"
+                          r"|\bwithout\s+losing\s+(?:quality|speed|performance|reliability|flexibility)"),
+    ("не только… но и", r"\bless\s+like\b[^.!?\n]{0,60}\bmore\s+like\b|\brather\s+than\s+merely\b"
+                        r"|\bне\s+столько\b[^.!?\n]{0,80}\bсколько\b|\bменьше\s+похож\w*\s+на\b[^.!?\n]{0,60}\bбольше\b"),
+    ("дидактика", r"\bmatters\s+(?:because|more\s+than)\b|\bэто\s+важно,\s+потому\s+что"
+                  r"|\bshould\s+be\s+(?:treated|understood|read)\s+as\b[^.!?\n]{0,80}\brather\s+than"
+                  r"|\bdoes\s+not\s+(?:by\s+itself\s+)?establish\b|\bshould\s+not\s+be\s+confused\s+with"
+                  r"|\bне\s+следует\s+путать\s+с\b|\bследует\s+рассматривать\s+как\b[^.!?\n]{0,80}\bа\s+не\b"),
+    ("переход-шаблон", S + r"\s*(?:looking\s+ahead|what\s+comes\s+next|заглядывая\s+вперед)\b|(?:^|\n)\s*что\s+дальше\?"),
+    ("постановка", r"\bworth\s+naming\b|\bsit\s+with\s+(?:that|this|it)\b|\b(?:that|this)(?:'s|\s+is)\s+the\s+(?:whole|entire)"
+                   r"\s+point|\bdon'?t\s+take\s+my\s+word\s+for\s+it|\bfits\s+in\s+your\s+head|\bis\s+real,\s+and\b"
+                   r"|\bв\s+этом\s+(?:и\s+)?весь\s+смысл|\bпобудьте\s+с\s+этим"),
+    ("показная честность", S + r"\s*(?:honestly|frankly|look),"),
+    ("опора на самоописание", r"\b(?:identifies|lists)\s+(?:him|her|them|it|itself|himself|herself)\s+as\b|\bзначится\s+как\b"),
+    ("инструкция в чистовике", r"\b(?:verify|check|confirm|double-check)\b[^.\n]{0,60}\bbefore\s+(?:publishing|submitting|sending)"
+                               r"|\b(?:проверьте|уточните|сверьте)\b[^.\n]{0,60}\bперед\s+(?:публикацией|отправкой)"),
+    ("след чат-инструмента", r"</?mark>|attributableIndex"),
+    ("заглушка", r"\b(?:INSERT|PASTE)_[A-Z0-9_]+|\bexample\.com/(?:source|article|news)\d*|\b20\d\d-XX-XX\b"),
 ]
 COMPILED = [(name, re.compile(rx, re.I)) for name, rx in MARKERS]
-INVISIBLE = re.compile("[\u200b-\u200d\u2060\u00ad\u2010\u2011\u200e\u200f\u202a-\u202e\u2066-\u2069]|(?<!^)\ufeff")
+# невидимые и редкие символы; редкие пробелы и минус (U+202F, U+2002-U+200A, U+205F, U+2212, U+2012, U+2015) по замеру
+# avoid-ai-writing-russian есть в 16-26% ответов o3 и в 2% текстов людей
+INVISIBLE = re.compile("[\u200b-\u200d\u2060\u00ad\u2010\u2011\u200e\u200f\u202a-\u202e\u2066-\u2069"
+                       "\u202f\u2002-\u200a\u205f\u2212\u2012\u2015\u061c\u180e]|(?<!^)\ufeff")
+NBSP_LIMIT = 3  # обычный неразрывный пробел люди ставят часто: отмечаем, только когда их много
 MERISM = re.compile(r"\bот\s+([^\d.!?,;:\n]{2,40}?)\s+до\s+([^\d.!?,;:\n]{2,40}?)(?=[,.;!?\n]|$)", re.I)
 
 
@@ -259,10 +286,13 @@ def check(text):
     hits = []
     raw = re.sub(r"`[^`\n]*`", "", re.sub(r"(?ms)^\s*(```|~~~).*?^\s*\1[^\n]*$", "", text))
     for name, rx in (("елочки и лапки", r"[«»„“”]"), ("буква е с точками", r"[ёЁ]"), ("типографский апостроф", r"[’‘]"),
-                     ("невидимые символы", INVISIBLE.pattern)):
+                     ("невидимые и редкие символы", INVISIBLE.pattern)):
         found = [m.start() for m in re.finditer(rx, raw)]
         if found:
             hits.append((raw.count("\n", 0, found[0]) + 1, name, f"{len(found)} шт."))
+    nbsp = [m.start() for m in re.finditer("\u00a0", raw)]
+    if len(nbsp) >= NBSP_LIMIT:
+        hits.append((raw.count("\n", 0, nbsp[0]) + 1, "неразрывные пробелы", f"{len(nbsp)} шт., человек столько не ставит"))
     colons = [m.start() for m in re.finditer(r"[^\s:/\d]:(?=[ \t]+\S)", clean)]
     if len(colons) > 1:
         hits.append((clean.count("\n", 0, colons[0]) + 1, "двоеточия", f"{len(colons)} посреди фраз"))

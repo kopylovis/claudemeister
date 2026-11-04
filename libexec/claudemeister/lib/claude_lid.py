@@ -66,7 +66,8 @@ def battery():
 
 def watcher_pid():
     try:
-        pid = int(open(PIDFILE).read().strip())
+        with open(PIDFILE) as f:
+            pid = int(f.read().strip())
         os.kill(pid, 0)
         return pid
     except (OSError, ValueError):
