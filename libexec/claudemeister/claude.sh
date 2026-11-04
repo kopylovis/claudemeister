@@ -48,6 +48,7 @@ claudemeister notify                уведомления, когда Claude ж
 claudemeister ps                    открытые сессии Claude Code: кто ждет тебя, перейти во вкладку
 claudemeister restore               открыть заново сессии, открытые до перезагрузки или падения
 claudemeister doctor                проверить установку: команды, хуки, MCP, уведомления, promptsill, прокси
+claudemeister lid                   не засыпать с закрытой крышкой в caffeinate-сессиях: setup, remove, off
 claudemeister setup                 поставить /restart, хуки, MCP-сервер, хук zsh, прокси и promptsill
                                     (--country KZ для прокси, --remove убрать; подробнее: setup -h)
 claudemeister --version             версия
@@ -55,6 +56,7 @@ claudemeister --version             версия
 caffeinate (по умолчанию) не даёт Mac уснуть, пока идёт сессия:
 удобно для долгих задач и Remote Control с телефона. Экран при этом гаснуть может.
 С закрытой крышкой на батарее Mac все равно уснет, caffeinate этого не отменяет.
+claudemeister lid setup разрешит не засыпать и с закрытой крышкой (спросит пароль sudo).
 Папка проектов: ~/Developer, строка projects=<путь> в ~/.config/mnrh/config или MNRH_PROJECTS=<путь>.
 EOF
 }
@@ -68,6 +70,7 @@ case "${1:-}" in
   ps) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_live.py" ps "$@" ;;
   restore) exec /usr/bin/python3 "$(dirname "$MENU")/claude_live.py" "$@" ;;
   doctor) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_doctor.py" "$@" ;;
+  lid) shift; exec /usr/bin/python3 "$(dirname "$MENU")/claude_lid.py" "$@" ;;
   parallel) exec /usr/bin/python3 "$(dirname "$MENU")/claude_parallel.py" "$@" ;;
   ask) exec /usr/bin/python3 "$(dirname "$MENU")/claude_ask.py" "$@" ;;
   release-notes) exec /usr/bin/python3 "$(dirname "$MENU")/release_notes.py" "$@" ;;
@@ -196,10 +199,9 @@ fi
 
 cd "$dir" || exit 1
 echo "-> ${dir/#$HOME/~} · $mode$([ "$net" = vps ] && echo ' · через VPS')$([ "${CLAUDE_CODE_SKIP_PROMPT_HISTORY:-}" = 1 ] && echo ' · без записи')"
-# если рядом стоит mnrh с настроенным sleep lid, он держит Mac и с закрытой крышкой; без mnrh шаг молча пропускается
-MNRH=$(command -v mnrh)
+# после claudemeister lid setup сторож держит Mac и с закрытой крышкой; без правила шаг молча пропускается
 if [ "$mode" = caffeinate ]; then
-  [ -n "$MNRH" ] && "$MNRH" sleep lid keep >/dev/null 2>&1
+  /usr/bin/python3 "$LIB/claude_lid.py" keep >/dev/null 2>&1
   exec ${pre[@]+"${pre[@]}"} caffeinate -is "$CLAUDE_BIN" "${passthrough[@]+"${passthrough[@]}"}"
 else
   exec ${pre[@]+"${pre[@]}"} "$CLAUDE_BIN" "${passthrough[@]+"${passthrough[@]}"}"

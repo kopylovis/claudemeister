@@ -23,6 +23,7 @@ claudemeister setup          /restart, /forget and other commands, hooks, MCP se
 claudemeister ps             open Claude Code sessions: which wait for you; pick one to jump to its tab
 claudemeister restore        reopen the sessions that were open when the Mac rebooted or Claude crashed
 claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
+claudemeister lid            don't sleep with the lid closed in caffeinate sessions: setup, remove, off
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
 claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
 claudemeister fresh          from inside Claude: new untitled session, this one stays in /resume
@@ -132,6 +133,15 @@ Then you pick a mode the same way:
 
 `-k` and `-n` choose the mode without asking, and everything after `--` goes to claude:
 `claudemeister kcalm -k -- --continue`. caffeinate doesn't help with a closed lid on battery: the Mac sleeps anyway.
+
+`claudemeister lid setup` gets around that. It asks for your sudo password and installs
+`/etc/sudoers.d/mnrh-pmset`, a passwordless rule for exactly `pmset -a disablesleep 1` and
+`pmset -a disablesleep 0`. From then on each caffeinate session starts a watcher. It turns `disablesleep` on
+while at least one such session is alive and off two minutes after the last one ends, which covers a restart with
+`claude update`. It also lets go when the battery drops to 15%, with a notification. A Mac in a closed bag gets
+hot, so keep an eye on that yourself. `claudemeister lid` shows whether the watcher holds the lid now, `off` lets
+go at once, and `remove` deletes the rule. The watcher's log is `~/.local/state/mnrh/lid.log`. The rule and the
+watcher are shared with `mnrh sleep lid`, so if you set it up in mnrh, claudemeister picks it up.
 
 ### A session through your own server: `claudemeister proxy`
 

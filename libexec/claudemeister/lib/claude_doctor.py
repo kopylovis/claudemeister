@@ -12,7 +12,7 @@ from claude_proc import CLAUDE_BIN  # noqa: E402
 import claude_settings  # noqa: E402
 
 USAGE = """claudemeister doctor    проверить установку: claude, команды, хуки, статус в iTerm2, MCP-сервер, хук zsh,
-                       уведомления, promptsill, прокси, хранение переписок. Код выхода 1, если что-то сломано"""
+                       уведомления, promptsill, прокси, крышку, хранение переписок. Код выхода 1, если что-то сломано"""
 
 
 def run(cmd, timeout=15, stdin=None):
@@ -167,6 +167,16 @@ def check_proxy():
     return [("ok", "прокси через VPS не настроен, claudemeister -x недоступен")]
 
 
+def check_lid():
+    import claude_lid
+    if claude_lid.ready():
+        return [("ok", f"крышка: caffeinate-сессии не уснут и с закрытой крышкой (на батарее до "
+                       f"{claude_lid.LOW_BATTERY}% заряда)")]
+    if claude_lid.disabled() and not claude_lid.watcher_pid():
+        return [("warn", "сон отключен (pmset disablesleep 1), а сторожа нет: claudemeister lid off")]
+    return [("ok", "крышка: закрытая крышка усыпит Mac и в caffeinate-сессии (claudemeister lid setup)")]
+
+
 def check_modes():
     conf = read_config()
     states = [f"{name} {'вкл' if on else 'выкл'}" for name, on in
@@ -176,7 +186,7 @@ def check_modes():
 
 
 CHECKS = [check_install, check_commands, check_settings, check_iterm, check_mcp, check_zsh, check_notify, check_proxy,
-          check_modes]
+          check_lid, check_modes]
 
 
 def main(args):

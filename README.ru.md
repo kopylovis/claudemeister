@@ -21,6 +21,7 @@ claudemeister setup          команды /restart, /forget и другие, �
 claudemeister ps             открытые сессии Claude Code: кто ждет тебя; выбрать и перейти во вкладку
 claudemeister restore        открыть заново сессии, открытые до перезагрузки Mac или падения Claude
 claudemeister doctor         проверить установку: команды, хуки, MCP-сервер, уведомления, promptsill, прокси
+claudemeister lid            не засыпать с закрытой крышкой в caffeinate-сессиях: setup, remove, off
 claudemeister restart        изнутри Claude: закрыть, claude update, открыть эту же сессию снова
 claudemeister forget         изнутри Claude: удалить эту сессию без следа и открыть чистую
 claudemeister fresh          изнутри Claude: новая сессия без названия, эта остаётся в /resume
@@ -131,6 +132,16 @@ macOS, bash и `/usr/bin/python3` из Xcode Command Line Tools (`xcode-select -
 `-k` и `-n` выбирают режим без вопроса, всё после `--` передаётся claude:
 `claudemeister kcalm -k -- --continue`. Закрытую крышку на батарее caffeinate не
 перебивает: Mac с закрытой крышкой без зарядки все равно уснет.
+
+Это обходит `claudemeister lid setup`. Он спрашивает пароль sudo и ставит
+`/etc/sudoers.d/mnrh-pmset`, правило без пароля ровно на `pmset -a disablesleep 1` и
+`pmset -a disablesleep 0`. Дальше каждая caffeinate-сессия запускает сторожа. Он включает
+`disablesleep`, пока жива хоть одна такая сессия, и снимает его через две минуты после
+последней, этого хватает на перезапуск с `claude update`. Еще он снимает запрет, когда батарея садится до
+15%, и присылает уведомление. В закрытой сумке Mac греется, так что следи за этим сам.
+`claudemeister lid` показывает, держит ли сторож крышку сейчас, `off` отпускает ее сразу,
+`remove` убирает правило. Журнал сторожа лежит в `~/.local/state/mnrh/lid.log`. Правило и
+сторож общие с `mnrh sleep lid`: если ты настроил его в mnrh, claudemeister подхватит его сам.
 
 ### Сессия через свой сервер: `claudemeister proxy`
 
