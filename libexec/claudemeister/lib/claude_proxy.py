@@ -607,6 +607,109 @@ def setup(args):
     return 0
 
 
+VERSION_RE = re.compile(r"\bv?(\d+\.\d+\.\d+)\b")
+
+
+def parse_version(text):
+    m = VERSION_RE.search(text or "")
+    return m.group(1) if m else None
+
+
+def newer(a, b):
+    """Версия a новее b (обе вида 1.19.33)."""
+    return bool(a and b) and tuple(map(int, a.split("."))) > tuple(map(int, b.split(".")))
+
+
+def brew_bin():
+    return shutil.which("brew") or next((b for b in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew")
+                                         if os.access(b, os.X_OK)), None)
+
+
+def from_brew(exe):
+    return "/Cellar/mihomo/" in os.path.realpath(exe or "")
+
+
+def installed_version(exe=None):
+    exe = exe or mihomo_bin()
+    if not exe:
+        return None
+    try:
+        out = subprocess.run([exe, "-v"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return parse_version(out)
+
+
+def running_version():
+    """Версия запущенного mihomo по его API или None, если он не отвечает."""
+    return parse_version(str(mihomo_api("/version").get("version") or ""))
+
+
+def brew_latest():
+    """Свежая версия mihomo по данным Homebrew на этом Mac, без сети: brew update обновляет их сам."""
+    brew = brew_bin()
+    if not brew:
+        return None
+    try:
+        out = subprocess.run([brew, "info", "--json=v2", "mihomo"], capture_output=True, text=True, timeout=10,
+                             env=dict(os.environ, HOMEBREW_NO_AUTO_UPDATE="1")).stdout
+        return parse_version(json.loads(out)["formulae"][0]["versions"]["stable"])
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, IndexError):
+        return None
+
+
+def version_line():
+    exe = mihomo_bin()
+    have = installed_version(exe)
+    if not have:
+        return None
+    line = f"mihomo {have}" + (" из Homebrew" if from_brew(exe) else f", {tilde(exe)}")
+    latest = brew_latest() if from_brew(exe) else None
+    if newer(latest, have):
+        line += f", есть {latest}: claudemeister proxy update"
+    running = running_version()
+    if running and running != have:
+        line += f". Запущен еще {running}, новая версия заработает после перезапуска mihomo"
+    return line
+
+
+def update():
+    """Обновить mihomo через Homebrew и перезапустить запущенный, чтобы заработала новая версия."""
+    exe = mihomo_bin()
+    if not exe:
+        return 0 if install_mihomo() else 1
+    if not from_brew(exe):
+        print(f"{WARN} mihomo стоит не из Homebrew ({tilde(exe)}), обнови его тем же способом, каким ставил. "
+              "Релизы: https://github.com/MetaCubeX/mihomo/releases")
+        return 1
+    before = installed_version(exe)
+    print("brew upgrade mihomo …", flush=True)
+    if subprocess.run([brew_bin(), "upgrade", "mihomo"]).returncode != 0:
+        print(f"{BAD} brew upgrade mihomo не сработал")
+        return 1
+    after = installed_version()
+    print(f"{OK} mihomo {before} → {after}" if newer(after, before) else f"{OK} mihomo {after}, это последняя версия")
+    running = running_version()
+    if not running or running == after:
+        return 0
+    live = holders()
+    if not live:
+        with locked():
+            stop()
+        print(f"{OK} старый mihomo {running} остановлен, новый запустится с первой сессией через VPS")
+        return 0
+    question = (f"Сейчас через VPS идут сессии ({len(live)}), они работают на mihomo {running}. Перезапустить его сейчас? "
+                "Запросы, которые идут в эту секунду, оборвутся, Claude Code их повторит [y/N] ")
+    if sys.stdin.isatty() and input(question).strip().lower() in ("y", "yes", "д", "да"):
+        with locked():
+            stop()
+            start()
+        print(f"{OK} mihomo перезапущен, работает {running_version() or after}")
+    else:
+        print(f"{OK} mihomo {running} работает, пока идут сессии через VPS. {after} заработает после последней")
+    return 0
+
+
 def fmt(t):
     return f"{t[0]} ({t[1]})" if t else "не открылось"
 
@@ -620,6 +723,10 @@ def status(test=False):
     print(f"{OK} настроен: {tilde(CONFIG)}, порт {p}" + (f", выход должен быть в {want}" if want else ""))
     if not mihomo_bin():
         print(f"{BAD} нет mihomo: brew install mihomo")
+    else:
+        line = version_line()
+        if line:
+            print(f"{WARN if 'proxy update' in line or 'Запущен еще' in line else OK} {line}")
     if pid and listening(p):
         print(f"{OK} mihomo работает (pid {pid}), сессий через VPS {len(live)}")
         node, proto = active_node()
@@ -675,6 +782,7 @@ claudemeister proxy setup [ссылка] [--country KZ] [--only KZ]
                                   настроить по ссылке на подписку (https://…, как в Happ).
                                   --country: если выход окажется в другой стране, сессия не запустится;
                                   --only: брать из подписки только серверы, чьё имя подходит под это выражение
+claudemeister proxy update          обновить mihomo через Homebrew и перезапустить, если он запущен
 claudemeister proxy remove          удалить настройку
 claudemeister proxy run -- <cmd>    запустить команду через VPS (так делает claudemeister -x)
 
@@ -701,6 +809,8 @@ def main(argv):
         return setup(rest)
     if cmd == "remove":
         return remove()
+    if cmd == "update":
+        return update()
     if cmd == "run":
         return run(rest[1:] if rest[:1] == ["--"] else rest)
     if cmd == "configured":

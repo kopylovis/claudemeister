@@ -167,6 +167,12 @@ claudemeister proxy test                                    # exit IP and countr
 start instead of showing up from an unexpected place. `--only <pattern>` keeps only the servers whose names
 match. Encrypted `happ://crypt…` links can only be read by Happ, so use the plain `https://` one.
 
+`claudemeister proxy` shows the mihomo version and suggests `claudemeister proxy update` when Homebrew has a
+newer one. That command runs `brew upgrade mihomo`. If mihomo is running with no proxied sessions, it stops it
+and the new version starts with the next session. If sessions are running, it asks whether to restart mihomo
+now. Requests in flight at that moment break and Claude Code retries them. Without a restart the new version
+takes over after the last session.
+
 mihomo listens on `127.0.0.1:17890`, starts with the first proxied session and stops after the last. The
 session gets `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, and `NO_PROXY` for localhost. `/restart` and the windows
 that `open_claude` and `/parallel` open from such a session also go through the server.
