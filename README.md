@@ -518,10 +518,14 @@ tests`) and the last lines. The first line of the digest names the full log in
 7 days and are deleted together with the session by `/forget`.
 
 The output is replaced through `updatedToolOutput`, which Claude Code only accepts from `PostToolUse`, and that
-event fires only when the command exits with 0. When the build itself fails, Claude Code sends
-`PostToolUseFailure`, which can't change the output, so Claude sees it as before (Claude Code cuts anything
-past 30,000 characters). Commands like `./gradlew test --continue; echo "exit $?"` or `xcodebuild … | tee`
-exit with 0 and are shrunk even when the build fails. `claudemeister buildlog off` turns the hook off, `on`
+event fires only when the command exits with 0. So a `PreToolUse` hook appends
+`|| echo "[claudemeister buildlog: exit code was not 0]"` to the build command. A failed build prints that marker
+and exits with 0, and `PostToolUse` removes the marker and says in the digest's first line that the command
+failed. Short output from a failed build stays whole with the same note added. The tail has no expansions such
+as `$?`, because Claude Code treats such an `echo` as safe and doesn't ask for permission, and rules like
+`Bash(./gradlew:*)` keep matching. The cost is that the exit code is lost and Claude Code shows the failed call
+as successful. Multi-line commands, heredocs, comments and commands ending in `&` are left alone, and their
+failed output reaches Claude as before. `claudemeister buildlog off` turns the hook off, `on`
 turns it back on, and `buildlog test <file>` shows what Claude would see for a saved log.
 
 In iTerm2 3.7.7 and later, a build that runs longer than a second and a half is named in the tab next to

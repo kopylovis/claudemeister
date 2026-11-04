@@ -100,7 +100,7 @@ class Shrink(unittest.TestCase):
         self.assertIn("выжимка обрезана", out)
 
 
-class Hook(unittest.TestCase):
+class HookBase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.saved = b.LOGS, b.CLAUDE_HOME
@@ -116,6 +116,8 @@ class Hook(unittest.TestCase):
                 "tool_response": dict({"stdout": stdout, "stderr": "", "interrupted": False, "isImage": False,
                                        "noOutputExpected": False}, **resp)}
 
+
+class Hook(HookBase):
     def test_replaces_output_and_saves_log(self):
         text = fixture("gradle-failure.log")
         out = b.decide(self.payload(text))
@@ -185,6 +187,58 @@ class Hook(unittest.TestCase):
         out = json.loads(buf.getvalue())["hookSpecificOutput"]
         self.assertEqual(out["hookEventName"], "PostToolUse")
         self.assertIn("BUILD FAILED", out["updatedToolOutput"]["stdout"])
+
+
+class Wrap(unittest.TestCase):
+    def test_wraps_builds_only(self):
+        self.assertEqual(b.wrap("cd app && ./gradlew test"), "cd app && ./gradlew test" + b.WRAP)
+        self.assertEqual(b.wrap("xcodebuild -scheme A test | xcpretty  "), "xcodebuild -scheme A test | xcpretty" + b.WRAP)
+        self.assertIsNone(b.wrap("git status"))
+
+    def test_leaves_risky_commands_alone(self):
+        for cmd in ("./gradlew test # all", "./gradlew test &", "./gradlew test;", "make \\",
+                    "./gradlew test\necho done", "cat <<EOF | make -f -\nall:\nEOF", "./gradlew test" + b.WRAP):
+            self.assertIsNone(b.wrap(cmd), cmd)
+
+    def test_pre_decide_keeps_other_fields(self):
+        payload = {"hook_event_name": "PreToolUse", "tool_name": "Bash",
+                   "tool_input": {"command": "./gradlew test", "timeout": 600000, "description": "Run tests"}}
+        self.assertEqual(b.pre_decide(payload), {"command": "./gradlew test" + b.WRAP, "timeout": 600000,
+                                                 "description": "Run tests"})
+        payload["tool_input"]["run_in_background"] = True
+        self.assertIsNone(b.pre_decide(payload))
+
+    def test_wrapped_command_fails_into_marker(self):
+        import subprocess
+        r = subprocess.run(["/bin/bash", "-c", b.wrap("make -f /nonexistent-cm/Makefile")], capture_output=True,
+                           text=True)
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(r.stdout.strip(), b.FAIL_MARK)
+
+
+class FailedBuild(HookBase):
+    def test_long_failed_output_is_digested(self):
+        text = fixture("gradle-failure.log") + "\n" + b.FAIL_MARK
+        out = b.decide(self.payload(text, cmd="./gradlew build" + b.WRAP))
+        self.assertIn("команда завершилась с ошибкой", out["stdout"].split("\n")[0])
+        self.assertNotIn(b.FAIL_MARK, out["stdout"])
+        logs = os.listdir(os.path.join(b.LOGS, "abc-1"))
+        with open(os.path.join(b.LOGS, "abc-1", logs[0])) as f:
+            saved = f.read()
+        self.assertTrue(saved.startswith("$ ./gradlew build\n\n"))
+        self.assertNotIn(b.FAIL_MARK, saved)
+
+    def test_short_failed_output_gets_a_note(self):
+        out = b.decide(self.payload("e: Foo.kt:3:1 Unresolved reference\n" + b.FAIL_MARK,
+                                    cmd="./gradlew build" + b.WRAP))
+        self.assertEqual(out["stdout"], "e: Foo.kt:3:1 Unresolved reference\n" + b.FAILED_NOTE)
+        self.assertFalse(os.path.exists(b.LOGS))
+
+    def test_successful_wrapped_build_is_untouched(self):
+        self.assertIsNone(b.decide(self.payload("BUILD SUCCESSFUL", cmd="./gradlew build" + b.WRAP)))
+
+    def test_marker_from_unwrapped_command_is_ignored(self):
+        self.assertIsNone(b.decide(self.payload("x\n" + b.FAIL_MARK, cmd="./gradlew build")))
 
 
 class TabLabel(unittest.TestCase):

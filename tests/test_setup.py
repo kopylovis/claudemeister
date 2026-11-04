@@ -55,16 +55,16 @@ def sandbox(files, code, promptsill=False):
 
 
 def hooks(*rows):
-    """settings.json с хуками [(событие, команда, matcher)]."""
+    """settings.json с хуками [(событие, команда, matcher[, async])]."""
     out = {}
-    for event, command, matcher in rows:
-        out.setdefault(event, []).append(dict({"matcher": matcher} if matcher else {},
-                                              hooks=[{"type": "command", "command": command}]))
+    for event, command, matcher, *run_async in rows:
+        hook = dict({"type": "command", "command": command}, **({"async": True} if run_async and run_async[0] else {}))
+        out.setdefault(event, []).append(dict({"matcher": matcher} if matcher else {}, hooks=[hook]))
     return {"hooks": out}
 
 
 def current_hooks():
-    return dict(hooks(*[(e, f"claudemeister {c}", m) for e, c, _, m in HOOKS]), cleanupPeriodDays=365)
+    return dict(hooks(*[(e, f"claudemeister {c}", m, a) for e, c, a, m in HOOKS]), cleanupPeriodDays=365)
 
 
 SETTINGS = ".claude/settings.json"
@@ -108,6 +108,13 @@ class Pending(unittest.TestCase):
         self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE, SETTINGS: settings}), ["hooks"])
         # без settings.json хуки не проверить: не предлагаем
         self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE}), [])
+
+    def test_hook_that_became_sync(self):
+        # PreToolUse buildlog-hook был async, а updatedInput Claude Code берет только у синхронного
+        settings = current_hooks()
+        pre = [e for e in settings["hooks"]["PreToolUse"] if "buildlog-hook" in e["hooks"][0]["command"]][0]
+        pre["hooks"][0]["async"] = True
+        self.assertEqual(self.pending({RESTART: RESTART_MD, STATE: DONE, SETTINGS: settings}), ["hooks"])
 
     def test_new_hook_after_update(self):
         # установка до buildlog: хука PostToolUse нет, setup предлагают снова

@@ -64,7 +64,7 @@ HOOKS = [("SessionStart", "notice", False, None), ("SessionEnd", "session-end", 
          ("PreToolUse", "guard-hook", False, "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep"),
          ("SessionStart", "humanize-hook", False, None), ("UserPromptSubmit", "humanize-hook", False, None),
          ("Stop", "humanize-hook", True, None), ("PermissionRequest", "approve-hook", False, None),
-         ("PostToolUse", "buildlog-hook", False, "Bash"), ("PreToolUse", "buildlog-hook", True, "Bash"),
+         ("PostToolUse", "buildlog-hook", False, "Bash"), ("PreToolUse", "buildlog-hook", False, "Bash"),
          ("PostToolUseFailure", "buildlog-hook", True, "Bash")]
 # Таймаут хука в секундах, если не 10. approve-hook ждет ответа из Telegram до 9,5 минуты (telegram_approve.WAIT).
 HOOK_TIMEOUTS = {"approve-hook": 600}

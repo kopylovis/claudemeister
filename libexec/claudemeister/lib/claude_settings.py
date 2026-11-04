@@ -62,18 +62,23 @@ def save_atomic(data, path=PATH):
             os.remove(tmp)
 
 
-def hook_commands(settings):
-    """[(событие, matcher, команда)] всех хуков в settings. ValueError, если hooks не в формате Claude Code."""
+def hook_entries(settings):
+    """[(событие, matcher, команда, async)] всех хуков в settings. ValueError, если hooks не в формате Claude Code."""
     hooks = settings.get("hooks") or {}
     out = []
     try:
         for event, entries in hooks.items():
             for e in entries:
                 for h in e.get("hooks", []):
-                    out.append((event, e.get("matcher"), str(h.get("command", ""))))
+                    out.append((event, e.get("matcher"), str(h.get("command", "")), bool(h.get("async"))))
     except (AttributeError, TypeError) as e:
         raise ValueError(f"hooks: {e}") from None
     return out
+
+
+def hook_commands(settings):
+    """[(событие, matcher, команда)] всех хуков в settings. ValueError, если hooks не в формате Claude Code."""
+    return [row[:3] for row in hook_entries(settings)]
 
 
 def rows(cmd):
@@ -82,10 +87,11 @@ def rows(cmd):
 
 
 def missing(settings, wanted=HOOKS, exact=False):
-    """Строки wanted, которых нет в settings. exact: matcher тоже должен совпасть, иначе хук считается старым."""
-    have = hook_commands(settings)
-    return [r for r in wanted if not any(ev == r[0] and (not exact or m == r[3]) and is_hook(c, r[1])
-                                         for ev, m, c in have)]
+    """Строки wanted, которых нет в settings. exact: matcher и async тоже должны совпасть, иначе хук считается
+    старым (так PreToolUse buildlog-hook, бывший async, переставится синхронным: updatedInput от async не берется)."""
+    have = hook_entries(settings)
+    return [r for r in wanted if not any(ev == r[0] and (not exact or (m == r[3] and a == bool(r[2])))
+                                         and is_hook(c, r[1]) for ev, m, c, a in have)]
 
 
 def entry(cmd, run_async, matcher):
