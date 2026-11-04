@@ -12,7 +12,7 @@ past sessions, a project backlog, parallel tasks, window screenshots and release
 The interface and messages are in Russian.
 
 ```
-claudemeister                menu: pick a project, sessions, proxy, humanization, setup
+claudemeister                menu: projects, sessions, mode switches, proxy, setup
 claudemeister kcalm          straight into a project (a prefix of its name is enough)
 claudemeister root           in the home folder
 claudemeister ... -x         through your own VPS, this session only
@@ -23,7 +23,7 @@ claudemeister setup          /restart, /forget and other commands, hooks, MCP se
 claudemeister ps             open Claude Code sessions: which wait for you; pick one to jump to its tab
 claudemeister restore        reopen the sessions that were open when the Mac rebooted or Claude crashed
 claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
-claudemeister lid            don't sleep with the lid closed in caffeinate sessions: setup, remove, off
+claudemeister lid            don't sleep with the lid closed in caffeinate sessions: on, off, setup, remove
 claudemeister restart        from inside Claude: quit, claude update, reopen the same session
 claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
 claudemeister fresh          from inside Claude: new untitled session, this one stays in /resume
@@ -109,10 +109,13 @@ need `swiftc` from the same tools. `claudemeister -x` needs mihomo.
 
 ## How `claudemeister` works
 
-Without arguments in a terminal, `claudemeister` opens an action menu: pick a project, the home folder, saved
-sessions, proxy, humanization and setup. It runs the chosen action and prints the full command so you can type
-it directly next time. Afterwards you can go back to the menu. `MNRH_NO_MENU=1` skips the menu and goes straight
-to the project list.
+Without arguments in a terminal, `claudemeister` opens an action menu with four groups: sessions (a project, the
+home folder, saved ones, running ones, reopening after a reboot), modes, the VPS proxy and install. It runs the
+chosen action and prints the full command so you can type it directly next time. Afterwards you can go back to
+the menu. The humanize, guard, buildlog, notification and lid modes show as `[on]` or `[off]`, and Enter switches
+them in place without leaving the menu. Each item shows on the right the command that does the same. The menu
+follows the macOS language, Russian or English. A `lang=en` or `lang=ru` line in `~/.config/mnrh/config` picks
+one explicitly. `MNRH_NO_MENU=1` skips the menu and goes straight to the project list.
 
 `claudemeister open` lists the folders in the projects folder with their current branch and last commit date.
 Move with ↑↓ and press Enter. A digit jumps to that item (`0` is the home folder, `1` then `0` is the tenth),
@@ -139,8 +142,9 @@ Then you pick a mode the same way:
 `pmset -a disablesleep 0`. From then on each caffeinate session starts a watcher. It turns `disablesleep` on
 while at least one such session is alive and off two minutes after the last one ends, which covers a restart with
 `claude update`. It also lets go when the battery drops to 15%, with a notification. A Mac in a closed bag gets
-hot, so keep an eye on that yourself. `claudemeister lid` shows whether the watcher holds the lid now, `off` lets
-go at once, and `remove` deletes the rule. The watcher's log is `~/.local/state/mnrh/lid.log`. The rule and the
+hot, so keep an eye on that yourself. `claudemeister lid` shows whether the watcher holds the lid now. `off` turns
+the mode off and keeps the rule, so `on` brings it back without a password. `release` lets go until the next
+caffeinate session, and `remove` turns the mode off and deletes the rule. The watcher's log is `~/.local/state/mnrh/lid.log`. The rule and the
 watcher are shared with `mnrh sleep lid`, so if you set it up in mnrh, claudemeister picks it up.
 
 ### A session through your own server: `claudemeister proxy`
