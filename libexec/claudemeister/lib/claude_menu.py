@@ -33,6 +33,7 @@ ITEMS = [
     ("proxy", "Состояние", "Status"),
     ("proxy test", "Проверить выход", "Check the exit"),
     ("proxy setup", "Настроить по ссылке подписки", "Set up from a subscription link"),
+    ("proxy update", "Обновить mihomo", "Update mihomo"),
     (None, "Установка", "Install"),
     ("setup", "Настроить Claude Code: команды, хуки, MCP-сервер", "Set up Claude Code: commands, hooks, MCP server"),
     ("doctor", "Проверить установку", "Check the install"),
