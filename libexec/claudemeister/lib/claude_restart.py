@@ -9,7 +9,7 @@ import time
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import CM, HOME, MNRH, NOTICES, RESTART_QUEUE, UUID_RE, settings_path, tilde, write_json  # noqa: E402
+from mnrhlib import CM, HOME, NOTICES, RESTART_QUEUE, UUID_RE, settings_path, tilde, write_json  # noqa: E402
 from claude_proc import (CLAUDE_BIN, SHELLS, RestartError, argv_of, caffeinate_args, claude_version,  # noqa: E402
                          drop_name, find_claude, launcher, ps, resume_flags, session_file, session_path)
 import claude_search  # noqa: E402
@@ -109,8 +109,8 @@ def plan(update=True, forget=False, slim=False, fresh=False):
     run = (proxy + (["caffeinate"] + caffeinate if caffeinate is not None else []) + [CLAUDE_BIN]
            + (["--session-id", new_sid] if new else ["--resume", sid]) + flags)
     update = update and not new and not slim
-    # сон с закрытой крышкой держит mnrh sleep lid, он есть только в полном mnrh
-    keep = f"{shlex.quote(MNRH)} sleep lid keep >/dev/null 2>&1; " if caffeinate is not None and MNRH else ""
+    # после claudemeister lid setup сторож держит Mac и с закрытой крышкой; без правила keep ничего не делает
+    keep = f"{shlex.quote(CM)} lid keep >/dev/null 2>&1; " if caffeinate is not None else ""
     line = (f"cd {shlex.quote(cwd)} && " + keep
             + (f"{{ {shlex.quote(CLAUDE_BIN)} update; " if update else "{ ")
             + ("clear; printf '\\033[3J'; " if new else "")
