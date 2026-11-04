@@ -16,42 +16,50 @@ MENU="$LIB/menu.py"
 
 help() {
   cat <<'EOF'
-claudemeister                       меню: проект, сессии, прокси, humanization, setup (MNRH_NO_MENU=1 без него)
-claudemeister open                  выбрать проект в папке проектов и запустить в нём Claude Code
-claudemeister root                  запустить в домашнем каталоге
-claudemeister <имя>                 сразу в проекте (достаточно начала имени) или в папке по пути
-claudemeister ... -n                обычная сессия без вопроса
-claudemeister ... -k                caffeinate без вопроса
-claudemeister ... -x                через свой VPS: только эта сессия, остальные программы напрямую
-claudemeister ... -d                напрямую, без вопроса про VPS
-claudemeister ... --new             новая сессия, не предлагать продолжить сохранённые
-claudemeister ... -i                без записи на диск: переписки и истории промптов не останется
-claudemeister ... -- <аргументы>    аргументы для claude, например: claudemeister kcalm -- --continue
-claudemeister sessions              сохранённые сессии: размер, продолжить, перенести, удалить (sessions -h)
-claudemeister usage                 токены и активное время по проектам и моделям (--days N, --project P)
-claudemeister restart               изнутри Claude: закрыть и открыть эту же сессию заново, с claude update
-claudemeister forget                изнутри Claude: удалить эту сессию без следа и открыть чистую
-claudemeister fresh                 изнутри Claude: новая сессия без названия, эта остаётся в /resume (/fresh)
-claudemeister slim                  изнутри Claude: сжать эту сессию и открыть снова
-claudemeister brief                 где мы остановились: git, прошлая сессия, бэклог (/where)
-claudemeister parallel "<…>"        задача в отдельной ветке и worktree, во втором окне Claude (/parallel)
-claudemeister ask <пр> <…>          спросить отдельный Claude про другой проект, только чтение (/ask)
-claudemeister release-notes         материал для «Что нового» к релизу (/release-notes)
-claudemeister todo                  бэклог проекта между сессиями (/todo; подробнее: todo -h)
-claudemeister shot                  снимок окна приложения (/shot)
-claudemeister deps                  устаревшие зависимости Gradle в gradle/libs.versions.toml
-claudemeister proxy                 прокси через VPS для отдельных сессий: setup, test, remove (proxy -h)
-claudemeister guard                 спросит перед чтением или удалением ключей и необратимыми командами
-claudemeister buildlog              длинный вывод Gradle, xcodebuild, тестов: Claude видит выжимку (on, off, test)
-claudemeister humanize              писать без признаков нейросети: on, off, check <файл>, rules (/humanize)
-claudemeister notify                уведомления, когда Claude ждёт тебя (on, off, after <сек>, test, telegram)
-claudemeister ps                    открытые сессии Claude Code: кто ждет тебя, перейти во вкладку
-claudemeister restore               открыть заново сессии, открытые до перезагрузки или падения
-claudemeister doctor                проверить установку: команды, хуки, MCP, уведомления, promptsill, прокси
-claudemeister lid                   не засыпать с закрытой крышкой в caffeinate-сессиях: on, off, setup, remove
-claudemeister setup                 поставить /restart, хуки, MCP-сервер, хук zsh, прокси и promptsill
-                                    (--country KZ для прокси, --remove убрать; подробнее: setup -h)
-claudemeister --version             версия
+Запуск
+  claudemeister                     меню (MNRH_NO_MENU=1 сразу к выбору проекта)
+  claudemeister open                выбрать проект в папке проектов
+  claudemeister <имя>               сразу в проекте (начала имени хватит) или в папке по пути
+  claudemeister root                в домашней папке
+  claudemeister ... -k | -n         caffeinate или обычная сессия, без вопроса
+  claudemeister ... -x | -d         через свой VPS или напрямую, без вопроса
+  claudemeister ... --new           новая сессия, не предлагать сохраненные
+  claudemeister ... -i              без записи на диск: ни переписки, ни истории промптов
+  claudemeister ... -- <аргументы>  аргументы для claude: claudemeister kcalm -- --continue
+  claudemeister sessions            сохраненные сессии: продолжить, перенести, удалить (sessions -h)
+  claudemeister ps                  запущенные сессии: кто ждет ответа, перейти во вкладку
+  claudemeister restore             вернуть сессии, открытые до перезагрузки или сбоя
+  claudemeister usage               токены и активное время по проектам (--days N, --project P)
+
+Изнутри Claude Code (они же /restart, /forget, /fresh, /slim)
+  claudemeister restart             закрыть и открыть эту же сессию, с claude update
+  claudemeister forget              удалить эту сессию без следа и открыть чистую
+  claudemeister fresh               новая сессия без названия, эта остается в /resume
+  claudemeister slim                сжать эту сессию и открыть снова
+
+Режимы (on, off)
+  claudemeister humanize            правила письма без признаков нейросети; check <файл>, rules
+  claudemeister guard               вопрос перед чтением ключей и опасными командами; test, log
+  claudemeister buildlog            выжимка длинного вывода сборок для Claude; test <файл>
+  claudemeister notify              уведомления, когда Claude ждет; after <сек>, test, telegram
+  claudemeister lid                 не засыпать с закрытой крышкой; setup, release, remove
+
+Прокси через свой VPS
+  claudemeister proxy               состояние; setup, test, update, remove (proxy -h)
+
+Инструменты проекта (Claude зовет их и сам)
+  claudemeister brief               где мы остановились: git, прошлая сессия, бэклог (/where)
+  claudemeister todo                бэклог проекта между сессиями (/todo, todo -h)
+  claudemeister parallel "<…>"      задача в своей ветке и worktree, во втором окне (/parallel)
+  claudemeister ask <пр> <…>        спросить отдельный Claude про другой проект (/ask)
+  claudemeister release-notes       материал для "Что нового" к релизу (/release-notes)
+  claudemeister shot                снимок окна приложения (/shot)
+  claudemeister deps                устаревшие зависимости Gradle в gradle/libs.versions.toml
+
+Установка
+  claudemeister setup               команды, хуки, MCP-сервер, хук zsh, прокси, promptsill (setup -h)
+  claudemeister doctor              проверить установку
+  claudemeister --version           версия
 
 caffeinate (по умолчанию) не даёт Mac уснуть, пока идёт сессия:
 удобно для долгих задач и Remote Control с телефона. Экран при этом гаснуть может.
