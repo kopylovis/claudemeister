@@ -524,6 +524,12 @@ past 30,000 characters). Commands like `./gradlew test --continue; echo "exit $?
 exit with 0 and are shrunk even when the build fails. `claudemeister buildlog off` turns the hook off, `on`
 turns it back on, and `buildlog test <file>` shows what Claude would see for a saved log.
 
+In iTerm2 3.7.7 and later, a build that runs longer than a second and a half is named in the tab next to
+Claude's status, for example `gradlew :app:assembleDebug` or `xcodebuild test`. It is set with `it2 session
+set-status --detail`. The iTerm2 hook clears that text on every Claude Code event, so claudemeister sets it after
+a short delay, and the same iTerm2 hook clears it when the build ends. It works inside tmux too.
+`buildlog off` turns it off along with the digest.
+
 ### Notifications when Claude is waiting for you
 
 `claudemeister setup` installs the `UserPromptSubmit`, `Stop` and `Notification` hooks (asynchronous, Claude

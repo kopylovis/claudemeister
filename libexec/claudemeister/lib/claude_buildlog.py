@@ -10,6 +10,8 @@ PostToolUse приходит только после вызова с кодом 
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 
@@ -54,28 +56,37 @@ def enabled():
     return read_config().get("buildlog", "on") != "off"
 
 
-def build_kind(cmd):
-    """Чем собирают в команде: gradle, xcodebuild, swift, npm, pytest, make; None, если ничем из этого."""
+def find_build(cmd):
+    """(чем собирают, имя программы, ее аргументы) для первой сборки в команде; None, если сборки нет."""
     for seg in split_segments(cmd or ""):
         ws = strip_env(words(seg))
         if not ws:
             continue
         exe, rest = os.path.basename(ws[0]), ws[1:]
+        kind = None
         if exe in ("gradlew", "gradle", "gradlew.bat"):
-            return "gradle"
-        if exe == "xcodebuild" or (exe == "xcrun" and rest[:1] == ["xcodebuild"]):
-            return "xcodebuild"
-        if exe == "swift" and rest[:1] in (["build"], ["test"]):
-            return "swift"
-        if exe in PACKAGE_MANAGERS and any(SCRIPT.match(a) for a in positional(rest)[:3]):
-            return "npm"
-        if exe in ("pytest", "py.test") or (re.match(r"^python[\d.]*$", exe) and "pytest" in rest[1:2]
-                                            and rest[:1] == ["-m"]) or \
+            kind = "gradle"
+        elif exe == "xcodebuild" or (exe == "xcrun" and rest[:1] == ["xcodebuild"]):
+            kind = "xcodebuild"
+        elif exe == "swift" and rest[:1] in (["build"], ["test"]):
+            kind = "swift"
+        elif exe in PACKAGE_MANAGERS and any(SCRIPT.match(a) for a in positional(rest)[:3]):
+            kind = "npm"
+        elif exe in ("pytest", "py.test") or (re.match(r"^python[\d.]*$", exe) and "pytest" in rest[1:2]
+                                              and rest[:1] == ["-m"]) or \
                 (exe in ("uv", "poetry", "pipenv", "pdm", "hatch") and "pytest" in rest[:3]):
-            return "pytest"
-        if exe in ("make", "gmake"):
-            return "make"
+            kind = "pytest"
+        elif exe in ("make", "gmake"):
+            kind = "make"
+        if kind:
+            return kind, exe, rest
     return None
+
+
+def build_kind(cmd):
+    """Чем собирают в команде: gradle, xcodebuild, swift, npm, pytest, make; None, если ничем из этого."""
+    found = find_build(cmd)
+    return found[0] if found else None
 
 
 def is_long(text):
@@ -237,6 +248,109 @@ def decide(payload):
     return out
 
 
+XCODE_ACTIONS = {"build", "test", "archive", "clean", "analyze", "build-for-testing", "test-without-building",
+                 "docbuild", "installsrc", "install"}
+TABS = os.path.join(CACHE, "tabs")
+TAB_DELAY = 1.5
+LABEL_CHARS = 48
+
+
+def tab_label(cmd):
+    """Подпись для вкладки: программа и цели сборки без ключей, например gradlew :app:assembleDebug."""
+    found = find_build(cmd)
+    if not found:
+        return None
+    kind, exe, rest = found
+    if exe == "xcrun":
+        exe, rest = "xcodebuild", rest[1:]
+    args = [a for a in positional(rest) if "=" not in a and "/" not in a.rstrip("/")]
+    if kind == "xcodebuild":
+        args = [a for a in rest if a in XCODE_ACTIONS] or ["build"]
+    label = " ".join([exe] + args[:3])
+    return label if len(label) <= LABEL_CHARS else label[:LABEL_CHARS - 1] + "…"
+
+
+def iterm_target(env=None):
+    """Аргументы it2 для вкладки этой сессии: [путь к it2, ключи сессии]. None, если это не iTerm2 или it2 нет."""
+    env = os.environ if env is None else env
+    if env.get("LC_TERMINAL") != "iTerm2" and env.get("TERM_PROGRAM") != "iTerm.app":
+        return None
+    it2 = shutil.which("it2", path=env.get("PATH")) or next(
+        (p for p in (os.path.expanduser("~/.config/iterm2/it2"), os.path.expanduser("~/.iterm2/bin/it2"),
+                     "/Applications/iTerm.app/Contents/Resources/utilities/it2") if os.access(p, os.X_OK)), None)
+    if not it2:
+        return None
+    if env.get("TMUX") and env.get("TMUX_PANE"):
+        return [it2, "--tmux", env["TMUX"], "--tmux-pane", env["TMUX_PANE"], "--quiet-if-unresolved"]
+    sid = env.get("ITERM_SESSION_ID", "").rpartition(":")[2]
+    return [it2, "-s", sid] if sid else None
+
+
+def set_detail(target, text):
+    try:
+        subprocess.run([target[0], "session", "set-status", *target[1:], "--detail", text],
+                       capture_output=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def tab_marker(tool_id, kind):
+    return os.path.join(TABS, re.sub(r"[^\w-]", "_", tool_id) + "." + kind)
+
+
+def remove(path):
+    """True, если файл был и его удалили. Из двух процессов удаляет ровно один."""
+    try:
+        os.remove(path)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def prune_tabs(now=None):
+    now = now or time.time()
+    for name in os.listdir(TABS):
+        path = os.path.join(TABS, name)
+        if now - os.path.getmtime(path) > 86400:
+            remove(path)
+
+
+def tab_hook(payload, target, sleep=time.sleep):
+    """Подпись сборки во вкладке iTerm2. Хук iTerm2 стирает подпись на каждом событии, в том числе на
+    PreToolUse этого же вызова, поэтому ставим ее через TAB_DELAY секунд. Пока PreToolUse ждет, в TABS лежит
+    <id>.wait, после подписи <id>.shown. Конец вызова удаляет тот, что есть: если сборка кончилась раньше, подпись
+    не ставим, а если пока ставили, убираем. Конец, пришедший раньше PreToolUse, оставляет <id>.done."""
+    event = payload.get("hook_event_name")
+    inp = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
+    tool_id = str(payload.get("tool_use_id") or "")
+    if payload.get("tool_name") != "Bash" or not tool_id or inp.get("run_in_background"):
+        return
+    label = tab_label(str(inp.get("command") or ""))
+    if not label:
+        return
+    wait, shown, done = (tab_marker(tool_id, k) for k in ("wait", "shown", "done"))
+    if event in ("PostToolUse", "PostToolUseFailure"):
+        if not remove(wait) and not remove(shown) and os.path.isdir(TABS):
+            open(done, "w").close()
+            prune_tabs()
+        return
+    if event != "PreToolUse":
+        return
+    os.makedirs(TABS, mode=0o700, exist_ok=True)
+    if remove(done):
+        return
+    open(wait, "w").close()
+    prune_tabs()
+    sleep(TAB_DELAY)
+    if not os.path.exists(wait):
+        return
+    set_detail(target, label)
+    try:
+        os.rename(wait, shown)
+    except FileNotFoundError:
+        set_detail(target, "")
+
+
 def hook():
     try:
         payload = json.load(sys.stdin)
@@ -244,6 +358,12 @@ def hook():
         return 0
     if not isinstance(payload, dict) or not enabled():
         return 0
+    target = iterm_target()
+    if target:
+        try:
+            tab_hook(payload, target)
+        except OSError:
+            pass
     try:
         out = decide(payload)
     except Exception:
@@ -264,6 +384,7 @@ def usage():
     print("swift build/test, npm/pnpm/yarn test и build, pytest и make: Claude видит ошибки, предупреждения и итог,")
     print(f"а полный лог лежит в {tilde(LOGS)}/<сессия>/ ({KEEP_DAYS} дней). Только для команд с кодом 0:")
     print("вывод упавшей команды Claude Code заменить не дает.")
+    print(f"В iTerm2 сборка дольше {TAB_DELAY:g} с подписана во вкладке рядом со статусом Claude: gradlew :app:assembleDebug.")
 
 
 def main():

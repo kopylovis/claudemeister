@@ -544,6 +544,11 @@ Claude Code режет сам). Команды вроде `./gradlew test --cont
 завершаются с кодом 0, и их вывод сжимается, даже если сборка упала. `claudemeister buildlog off` выключает
 хук, `on` включает, `buildlog test <файл>` показывает, что увидит Claude для сохранённого лога.
 
+В iTerm2 3.7.7 и новее сборка, которая идет дольше полутора секунд, подписана во вкладке рядом со статусом
+Claude, например `gradlew :app:assembleDebug` или `xcodebuild test`. Подпись ставит `it2 session set-status
+--detail`. Хук iTerm2 стирает ее на любом событии Claude Code, поэтому claudemeister ставит ее с задержкой, а
+по концу сборки ее убирает тот же хук iTerm2. Работает и в tmux. `buildlog off` выключает и подпись.
+
 ### Уведомления, когда Claude ждёт тебя
 
 `claudemeister setup` ставит хуки `UserPromptSubmit`, `Stop` и `Notification` (асинхронные,
