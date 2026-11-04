@@ -9,37 +9,48 @@ pick a saved session, restarts or slims the current session from inside Claude, 
 your own proxy server, guards secrets and asks before destructive commands, notifies you when Claude is waiting, and adds an MCP server for searching
 past sessions, a project backlog, parallel tasks, window screenshots and release notes.
 
-The interface and messages are in Russian.
+The menu follows the macOS language, Russian or English. Other messages are in Russian for now.
 
 ```
-claudemeister                menu: projects, sessions, mode switches, proxy, setup
-claudemeister kcalm          straight into a project (a prefix of its name is enough)
+# Start a session
+claudemeister                menu: sessions, mode switches, proxy, install
+claudemeister kcalm          straight into a project (a name prefix is enough)
 claudemeister root           in the home folder
-claudemeister ... -x         through your own VPS, this session only
-claudemeister ... -i         nothing written to disk: no transcript, no prompt history
-claudemeister sessions       saved sessions: resume, move, delete, clean, search, slim
-claudemeister usage          tokens and active time per project and model over the last N days
-claudemeister setup          /restart, /forget and other commands, hooks, MCP server, zsh hook, proxy, promptsill
-claudemeister ps             open Claude Code sessions: which wait for you; pick one to jump to its tab
-claudemeister restore        reopen the sessions that were open when the Mac rebooted or Claude crashed
-claudemeister doctor         check the install: commands, hooks, MCP server, notifications, promptsill, proxy
-claudemeister lid            don't sleep with the lid closed in caffeinate sessions: on, off, setup, remove
-claudemeister restart        from inside Claude: quit, claude update, reopen the same session
-claudemeister forget         from inside Claude: delete this session without a trace and open a clean one
-claudemeister fresh          from inside Claude: new untitled session, this one stays in /resume
-claudemeister slim           from inside Claude: slim this session down and reopen it
+claudemeister ... -x         this session through your own VPS
+claudemeister ... -i         nothing written to disk
+claudemeister sessions       saved sessions: resume, move, delete, search, slim
+claudemeister ps             running sessions and who is waiting; jump to a tab
+claudemeister restore        reopen sessions after a reboot or crash
+claudemeister usage          tokens and active time per project and model
+
+# From inside Claude Code, also as /restart, /forget, /fresh, /slim
+claudemeister restart        quit, claude update, reopen the same session
+claudemeister forget         delete this session and open a clean one
+claudemeister fresh          new session, this one stays in /resume
+claudemeister slim           slim this session down and reopen it
+
+# Modes: on, off
+claudemeister humanize       writing rules without AI tells; check <file>
+claudemeister guard          ask before touching keys and risky commands
+claudemeister buildlog       Claude gets a digest of long build output
+claudemeister notify         tell you when Claude is waiting; telegram, phone
+claudemeister lid            stay awake with the lid closed; setup, remove
+
+# Proxy through your VPS
+claudemeister proxy          status; setup, test, update, remove
+
+# Project tools, Claude also calls them through MCP and slash commands
 claudemeister brief          where we left off: git, last session, backlog
-claudemeister parallel       a task in its own branch and worktree, with a second Claude in a new window
-claudemeister ask            ask a separate, read-only Claude about another project
+claudemeister todo           project backlog between sessions
+claudemeister parallel       a task in its own worktree, with a second Claude
+claudemeister ask            ask a read-only Claude about another project
 claudemeister release-notes  material for "What's new" in a release
-claudemeister todo           project backlog that survives between sessions (add, done, rm, all)
-claudemeister shot [app]     screenshot of an app window; without arguments, a list of windows
-claudemeister deps           outdated Gradle dependencies in libs.versions.toml
-claudemeister proxy          proxy through your own server for chosen sessions: setup, test, remove
-claudemeister guard          ask before reading or deleting keys and before destructive commands; on, off, test, log
-claudemeister buildlog       Claude sees a digest of long build and test output: on, off, test <file>
-claudemeister humanize       writing rules without the usual AI tells: on, off, check <file>, rules
-claudemeister notify         notifications when Claude is waiting for you: on, off, after <sec>, test, telegram
+claudemeister shot [app]     screenshot of an app window
+claudemeister deps           outdated Gradle dependencies
+
+# Install
+claudemeister setup          commands, hooks, MCP server, zsh hook, promptsill
+claudemeister doctor         check the install
 ```
 
 ## Install

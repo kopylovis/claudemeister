@@ -26,7 +26,7 @@ test:
 	@./bin/claudemeister deps -h >/dev/null
 	@./bin/claudemeister notify -h | grep -q "notify phone"
 	@./bin/claudemeister proxy -h | grep -q mihomo
-	@./bin/claudemeister -h | grep -q -- '-x  '
+	@./bin/claudemeister -h | grep -q -- '-x | -d'
 	@XDG_CONFIG_HOME=/nonexistent-cm ./bin/claudemeister proxy run -- true 2>/dev/null; test $$? -eq 2
 	@XDG_CONFIG_HOME=/nonexistent-cm ./bin/claudemeister proxy >/dev/null; test $$? -eq 1
 	@! XDG_CONFIG_HOME=/nonexistent-cm ./bin/claudemeister proxy configured

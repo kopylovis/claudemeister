@@ -23,6 +23,7 @@ ITEMS = [
     ("sessions", "Сохраненные сессии: продолжить, перенести, удалить", "Saved sessions: resume, move, delete"),
     ("ps", "Запущенные сессии: кто ждет ответа", "Running sessions: who is waiting for you"),
     ("restore", "Вернуть сессии после перезагрузки или сбоя", "Reopen sessions after a reboot or crash"),
+    ("usage", "Расход: токены и время по проектам", "Usage: tokens and time per project"),
     (None, "Режимы, Enter переключает", "Modes, Enter switches"),
     ("mode humanize", "Писать без признаков нейросети", "Write without AI tells"),
     ("mode guard", "Спрашивать перед опасными командами", "Ask before risky commands"),

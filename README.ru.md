@@ -10,34 +10,45 @@
 для поиска по прошлым сессиям, бэклога, параллельных задач, снимков окон и заметок к релизу.
 
 ```
-claudemeister                меню: проекты, сессии, переключатели режимов, прокси, setup
+# Запуск
+claudemeister                меню: сессии, переключатели режимов, прокси, установка
 claudemeister kcalm          сразу в проекте (достаточно начала имени)
-claudemeister root           в домашнем каталоге
-claudemeister ... -x         через свой VPS, только эта сессия
-claudemeister ... -i         без записи на диск: ни переписки, ни истории промптов
-claudemeister sessions       сохранённые сессии: продолжить, перенести, удалить, clean, search, slim
-claudemeister usage          токены и активное время по проектам и моделям за последние N дней
-claudemeister setup          команды /restart, /forget и другие, хуки, MCP-сервер, хук zsh, прокси, promptsill
-claudemeister ps             открытые сессии Claude Code: кто ждет тебя; выбрать и перейти во вкладку
-claudemeister restore        открыть заново сессии, открытые до перезагрузки Mac или падения Claude
-claudemeister doctor         проверить установку: команды, хуки, MCP-сервер, уведомления, promptsill, прокси
-claudemeister lid            не засыпать с закрытой крышкой в caffeinate-сессиях: on, off, setup, remove
-claudemeister restart        изнутри Claude: закрыть, claude update, открыть эту же сессию снова
-claudemeister forget         изнутри Claude: удалить эту сессию без следа и открыть чистую
-claudemeister fresh          изнутри Claude: новая сессия без названия, эта остаётся в /resume
-claudemeister slim           изнутри Claude: сжать эту сессию и открыть снова
+claudemeister root           в домашней папке
+claudemeister ... -x         эта сессия через свой VPS
+claudemeister ... -i         без записи на диск
+claudemeister sessions       сохраненные сессии: продолжить, перенести, удалить
+claudemeister ps             запущенные сессии и кто ждет ответа
+claudemeister restore        вернуть сессии после перезагрузки или сбоя
+claudemeister usage          токены и активное время по проектам и моделям
+
+# Изнутри Claude Code, они же /restart, /forget, /fresh, /slim
+claudemeister restart        закрыть, claude update, открыть эту же сессию
+claudemeister forget         удалить эту сессию и открыть чистую
+claudemeister fresh          новая сессия, эта остается в /resume
+claudemeister slim           сжать эту сессию и открыть снова
+
+# Режимы: on, off
+claudemeister humanize       правила письма без признаков нейросети; check <файл>
+claudemeister guard          вопрос перед чтением ключей и опасными командами
+claudemeister buildlog       Claude получает выжимку длинного вывода сборок
+claudemeister notify         уведомления, когда Claude ждет; telegram, phone
+claudemeister lid            не засыпать с закрытой крышкой; setup, remove
+
+# Прокси через свой VPS
+claudemeister proxy          состояние; setup, test, update, remove
+
+# Инструменты проекта, Claude зовет их и сам через MCP и slash-команды
 claudemeister brief          где мы остановились: git, прошлая сессия, бэклог
-claudemeister parallel       задача в отдельной ветке и worktree, во втором окне Claude
-claudemeister ask            спросить отдельный Claude про другой проект, только чтение
-claudemeister release-notes  материал для «Что нового» к релизу
-claudemeister todo           бэклог задач проекта между сессиями (add, done, rm, all)
-claudemeister shot [прил.]   снимок окна приложения; без аргументов список окон
-claudemeister deps           устаревшие зависимости Gradle в libs.versions.toml
-claudemeister proxy          прокси через свой сервер для выбранных сессий: setup, test, remove
-claudemeister guard          вопрос перед чтением и удалением ключей и необратимыми командами; on, off, test, log
-claudemeister buildlog       выжимка длинного вывода сборок и тестов для Claude: on, off, test <файл>
-claudemeister humanize       правила письма без признаков нейросети: on, off, check <файл>, rules
-claudemeister notify         уведомления, когда Claude ждёт тебя: on, off, after <сек>, test, telegram
+claudemeister todo           бэклог проекта между сессиями
+claudemeister parallel       задача в своем worktree, во втором окне Claude
+claudemeister ask            спросить отдельный Claude про другой проект
+claudemeister release-notes  материал для "Что нового" к релизу
+claudemeister shot [прил.]   снимок окна приложения
+claudemeister deps           устаревшие зависимости Gradle
+
+# Установка
+claudemeister setup          команды, хуки, MCP-сервер, хук zsh, promptsill
+claudemeister doctor         проверить установку
 ```
 
 ## Установка
