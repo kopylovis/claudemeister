@@ -187,5 +187,111 @@ class Hook(unittest.TestCase):
         self.assertIn("BUILD FAILED", out["updatedToolOutput"]["stdout"])
 
 
+class TabLabel(unittest.TestCase):
+    def test_labels(self):
+        self.assertEqual(b.tab_label("cd app && ./gradlew :app:assembleDebug --no-daemon"), "gradlew :app:assembleDebug")
+        self.assertEqual(b.tab_label("xcodebuild -scheme App -destination 'platform=iOS Simulator,name=iPhone 16' test"),
+                         "xcodebuild test")
+        self.assertEqual(b.tab_label("xcrun xcodebuild -workspace A.xcworkspace -scheme A"), "xcodebuild build")
+        self.assertEqual(b.tab_label("npm run build"), "npm run build")
+        self.assertEqual(b.tab_label("python3 -m pytest tests/test_x.py -q"), "python3 pytest")
+        self.assertIsNone(b.tab_label("ls -la"))
+
+    def test_long_label_is_clipped(self):
+        label = b.tab_label("make " + " ".join(f"target{i}" * 3 for i in range(5)))
+        self.assertLessEqual(len(label), b.LABEL_CHARS)
+        self.assertTrue(label.endswith("…"))
+
+
+class ItermTarget(unittest.TestCase):
+    def setUp(self):
+        self.bin = tempfile.mkdtemp(prefix="cm-it2-")
+        it2 = os.path.join(self.bin, "it2")
+        with open(it2, "w") as f:
+            f.write("#!/bin/sh\n")
+        os.chmod(it2, 0o755)
+        self.it2 = it2
+
+    def tearDown(self):
+        shutil.rmtree(self.bin)
+
+    def test_iterm_session(self):
+        env = {"TERM_PROGRAM": "iTerm.app", "PATH": self.bin, "ITERM_SESSION_ID": "w0t1p0:ABC-123"}
+        self.assertEqual(b.iterm_target(env), [self.it2, "-s", "ABC-123"])
+
+    def test_tmux_pane(self):
+        env = {"LC_TERMINAL": "iTerm2", "PATH": self.bin, "TMUX": "/tmp/tmux-501/default,1,0", "TMUX_PANE": "%3",
+               "ITERM_SESSION_ID": "w0t1p0:OUTER"}
+        self.assertEqual(b.iterm_target(env), [self.it2, "--tmux", "/tmp/tmux-501/default,1,0", "--tmux-pane", "%3",
+                                               "--quiet-if-unresolved"])
+
+    def test_other_terminal(self):
+        self.assertIsNone(b.iterm_target({"TERM_PROGRAM": "Apple_Terminal", "PATH": self.bin}))
+
+
+class TabHook(unittest.TestCase):
+    def setUp(self):
+        self.tabs = tempfile.mkdtemp(prefix="cm-tabs-")
+        self.old, b.TABS = b.TABS, os.path.join(self.tabs, "tabs")
+        self.calls = []
+        self.old_set, b.set_detail = b.set_detail, lambda target, text: self.calls.append(text)
+
+    def tearDown(self):
+        b.TABS, b.set_detail = self.old, self.old_set
+        shutil.rmtree(self.tabs)
+
+    def event(self, name, command="./gradlew assembleDebug", tool_id="toolu_1"):
+        return {"hook_event_name": name, "tool_name": "Bash", "tool_use_id": tool_id,
+                "tool_input": {"command": command}}
+
+    def test_long_build_sets_detail(self):
+        b.tab_hook(self.event("PreToolUse"), ["it2"], sleep=lambda s: None)
+        self.assertEqual(self.calls, ["gradlew assembleDebug"])
+
+    def test_long_build_leaves_no_files(self):
+        b.tab_hook(self.event("PreToolUse"), ["it2"], sleep=lambda s: None)
+        b.tab_hook(self.event("PostToolUse"), ["it2"])
+        self.assertEqual(self.calls, ["gradlew assembleDebug"])
+        self.assertEqual(os.listdir(b.TABS), [])
+
+    def test_build_finished_during_delay_sets_nothing(self):
+        b.tab_hook(self.event("PreToolUse"), ["it2"],
+                   sleep=lambda s: b.tab_hook(self.event("PostToolUseFailure"), ["it2"]))
+        self.assertEqual(self.calls, [])
+        self.assertEqual(os.listdir(b.TABS), [])
+
+    def test_end_before_start_sets_nothing(self):
+        os.makedirs(b.TABS)
+        b.tab_hook(self.event("PostToolUse"), ["it2"])
+        b.tab_hook(self.event("PreToolUse"), ["it2"], sleep=lambda s: None)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(os.listdir(b.TABS), [])
+
+    def test_no_pre_hook_no_files(self):
+        b.tab_hook(self.event("PostToolUse"), ["it2"])
+        self.assertFalse(os.path.exists(b.TABS))
+
+    def test_build_finished_while_setting_clears(self):
+        def finish(target, text):
+            self.calls.append(text)
+            if text:
+                b.tab_hook(self.event("PostToolUse"), ["it2"])
+        b.set_detail = finish
+        b.tab_hook(self.event("PreToolUse"), ["it2"], sleep=lambda s: None)
+        self.assertEqual(self.calls, ["gradlew assembleDebug", ""])
+
+    def test_not_a_build(self):
+        b.tab_hook(self.event("PreToolUse", command="git status"), ["it2"], sleep=lambda s: None)
+        b.tab_hook(self.event("PostToolUse", command="git status"), ["it2"])
+        self.assertEqual(self.calls, [])
+        self.assertFalse(os.path.exists(b.TABS))
+
+    def test_background_build_is_skipped(self):
+        event = self.event("PreToolUse")
+        event["tool_input"]["run_in_background"] = True
+        b.tab_hook(event, ["it2"], sleep=lambda s: None)
+        self.assertEqual(self.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()
