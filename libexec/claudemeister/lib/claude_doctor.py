@@ -1,6 +1,7 @@
 """claudemeister doctor: одной командой проверить, что все части claudemeister на месте и работают."""
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -10,8 +11,8 @@ from mnrhlib import BAD, CM, OK, ROOT, WARN, promptsill_path, read_config, tilde
 from claude_proc import CLAUDE_BIN  # noqa: E402
 import claude_settings  # noqa: E402
 
-USAGE = """claudemeister doctor    проверить установку: claude, команды, хуки, MCP-сервер, хук zsh, уведомления,
-                       promptsill, прокси, хранение переписок. Код выхода 1, если что-то сломано"""
+USAGE = """claudemeister doctor    проверить установку: claude, команды, хуки, статус в iTerm2, MCP-сервер, хук zsh,
+                       уведомления, promptsill, прокси, хранение переписок. Код выхода 1, если что-то сломано"""
 
 
 def run(cmd, timeout=15, stdin=None):
@@ -93,6 +94,36 @@ def check_settings():
     return rows
 
 
+def iterm_rows(settings):
+    """Хуки статуса iTerm2 в settings. До 3.7.7 iTerm2 ставил бинарник cc-status, теперь it2 handle-agent-hook.
+    Пустой список, если интеграции iTerm2 с Claude Code нет."""
+    old, new = set(), 0
+    for _, _, cmd in claude_settings.hook_commands(settings):
+        if "handle-agent-hook" in cmd:
+            new += 1
+            continue
+        try:
+            words = shlex.split(cmd)
+        except ValueError:
+            continue
+        if words and os.path.basename(words[0]) == "cc-status":
+            old.add(os.path.expanduser(words[0]))
+    if not old:
+        return [("ok", "статус в iTerm2: it2 handle-agent-hook")] if new else []
+    fix = "iTerm2 > Install Claude Code Integration поставит it2 handle-agent-hook, потом снова claudemeister doctor"
+    gone = sorted(p for p in old if not os.path.exists(p))
+    if gone:
+        return [("bad", f"хуки iTerm2 вызывают {', '.join(map(tilde, gone))}, а файла нет. {fix}")]
+    return [("warn", f"хуки iTerm2 старые, вызывают {', '.join(map(tilde, sorted(old)))}. Пока работают. {fix}")]
+
+
+def check_iterm():
+    try:
+        return iterm_rows(claude_settings.load())
+    except ValueError:
+        return []  # битый settings.json уже показал check_settings
+
+
 def check_mcp():
     import setup_cmd
     from mcp_server import MCP_NAME
@@ -144,7 +175,7 @@ def check_modes():
     return [("ok", "режимы: " + ", ".join(states))]
 
 
-CHECKS = [check_install, check_commands, check_settings, check_mcp, check_zsh, check_notify, check_proxy,
+CHECKS = [check_install, check_commands, check_settings, check_iterm, check_mcp, check_zsh, check_notify, check_proxy,
           check_modes]
 
 
