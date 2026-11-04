@@ -103,8 +103,9 @@ def notice_hook(install, rename_rules=False):
         print(status_note)
         print("✓ guard: вопрос перед чтением и удалением ключей и перед необратимыми командами (reset --hard, "
               "push --force, rm -r вне проекта…) → хук PreToolUse (claudemeister guard)")
-        print("✓ длинный вывод сборок и тестов: Claude видит выжимку, полный лог в ~/.cache/mnrh/logs → хук "
-              "PostToolUse (claudemeister buildlog)")
+        print("✓ длинный вывод сборок и тестов: Claude видит выжимку, полный лог в ~/.cache/mnrh/logs, в iTerm2 "
+              "идущая сборка подписана во вкладке → хуки PreToolUse, PostToolUse и PostToolUseFailure "
+              "(claudemeister buildlog)")
         print("✓ уведомления, когда Claude ждёт тебя → хуки UserPromptSubmit, Stop и Notification "
               "(claudemeister notify -h)")
         print("✓ claudemeister humanization: правила письма без признаков нейросети → хуки SessionStart, UserPromptSubmit "
