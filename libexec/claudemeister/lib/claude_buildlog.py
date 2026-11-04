@@ -4,8 +4,8 @@
 Claude видит вместо него выжимку: упавшие задачи и тесты, ошибки и предупреждения со строками вокруг, итоговые строки
 и путь к полному логу в ~/.cache/mnrh/logs/<сессия>/. Подменяет вывод поле updatedToolOutput хука PostToolUse.
 PostToolUse приходит только после вызова с кодом 0. При ненулевом коде Claude Code шлет PostToolUseFailure, а там
-заменить вывод нельзя, поэтому упавшая сборка без | tee или ; echo доходит до Claude как есть (Claude Code сам режет
-вывод длиннее 30 000 символов).
+заменить вывод нельзя. Поэтому хук PreToolUse дописывает к сборке || echo с меткой FAIL_MARK: упавшая сборка
+завершается с кодом 0, а PostToolUse по метке пишет Claude, что команда упала. Код возврата при этом теряется.
 """
 import json
 import os
@@ -167,12 +167,12 @@ def render(lines, idx, header, footer, repeats=None):
     return "\n".join(out)
 
 
-def shrink(text, log_path):
-    """Выжимка из длинного вывода или None, если она не короче вдвое."""
+def shrink(text, log_path, failed=False):
+    """Выжимка из длинного вывода или None, если она не короче вдвое. failed: команда завершилась с ошибкой."""
     lines = ANSI.sub("", text).rstrip("\n").split("\n")
     idx, repeats, footer = pick(lines)
     size = len(text.encode("utf-8", "replace"))
-    header = (f"[claudemeister buildlog: вывод длинный ({len(lines)} строк, {max(1, size // 1024)} КБ), здесь выжимка: "
+    header = (f"[claudemeister buildlog: {FAILED_HEAD if failed else ''}вывод длинный ({len(lines)} строк, {max(1, size // 1024)} КБ), здесь выжимка: "
               f"ошибки, предупреждения, итог и конец. Полный лог: {tilde(log_path)}, ищи в нём grep или читай Read "
               f"с offset, если выжимки мало]")
     compact = render(lines, idx, header, footer, repeats)
@@ -224,27 +224,67 @@ def save(path, cmd, text):
         f.write(f"$ {cmd}\n\n{text}")
 
 
+# Хвост, который PreToolUse дописывает к сборке: так упавшая сборка завершается с кодом 0, Claude Code шлет
+# PostToolUse, и ее длинный вывод можно сжать. Текст без подстановок: echo с $? Claude Code просит подтвердить.
+FAIL_MARK = "[claudemeister buildlog: exit code was not 0]"
+WRAP = f' || echo "{FAIL_MARK}"'
+FAILED_HEAD = "команда завершилась с ошибкой (код не 0), "
+FAILED_NOTE = ("[claudemeister buildlog: команда завершилась с ошибкой (код не 0). Хук дописал к ней || echo, чтобы "
+               "сжать длинный вывод, поэтому Claude Code показывает вызов как успешный]")
+
+
+def wrap(cmd):
+    """Команда сборки с хвостом WRAP или None, если ее лучше не трогать: не сборка, несколько строк, heredoc,
+    комментарий или фоновый запуск, после которых хвост сменил бы смысл."""
+    stripped = (cmd or "").rstrip()
+    if not stripped or not build_kind(stripped) or FAIL_MARK in stripped or "\n" in stripped or "#" in stripped \
+            or "<<" in stripped or stripped.endswith(("&", ";", "|", "\\")):
+        return None
+    return stripped + WRAP
+
+
+def unwrap(cmd):
+    return cmd[:-len(WRAP)] if cmd.endswith(WRAP) else cmd
+
+
+def pre_decide(payload):
+    """updatedInput для PreToolUse или None."""
+    if payload.get("tool_name") != "Bash" or payload.get("hook_event_name") != "PreToolUse":
+        return None
+    inp = payload.get("tool_input")
+    if not isinstance(inp, dict) or inp.get("run_in_background"):
+        return None
+    cmd = wrap(str(inp.get("command") or ""))
+    return dict(inp, command=cmd) if cmd else None
+
+
 def decide(payload):
     """updatedToolOutput для хука или None, если вывод оставить как есть."""
     if payload.get("tool_name") != "Bash" or payload.get("hook_event_name", "PostToolUse") != "PostToolUse":
         return None
     inp = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
     resp = payload.get("tool_response")
-    cmd = str(inp.get("command") or "")
+    wrapped = str(inp.get("command") or "")
+    cmd = unwrap(wrapped)
     if inp.get("run_in_background") or not isinstance(resp, dict) or resp.get("interrupted") or \
             resp.get("isImage") or resp.get("backgroundTaskId") or not build_kind(cmd):
         return None
     text = full_output(resp)
-    if not is_long(text):
-        return None
-    path = log_path(payload.get("session_id"))
-    compact = shrink(text, path)
-    if compact is None:
-        return None
-    save(path, cmd, text)
-    prune()
+    at = text.rfind(FAIL_MARK) if wrapped != cmd else -1
+    failed = at >= 0
+    if failed:
+        text = (text[:at].rstrip("\n") + "\n" + text[at + len(FAIL_MARK):].lstrip("\n")).rstrip("\n")
     out = {k: v for k, v in resp.items() if k not in ("persistedOutputPath", "persistedOutputSize")}
-    out.update(stdout=compact, stderr="")
+    compact = None
+    if is_long(text):
+        path = log_path(payload.get("session_id"))
+        compact = shrink(text, path, failed)
+        if compact is not None:
+            save(path, cmd, text)
+            prune()
+    if compact is None and not failed:
+        return None
+    out.update(stdout=compact if compact is not None else text + "\n" + FAILED_NOTE, stderr="")
     return out
 
 
@@ -351,12 +391,47 @@ def tab_hook(payload, target, sleep=time.sleep):
         set_detail(target, "")
 
 
+def spawn_tab(payload):
+    """tab_hook для PreToolUse ждет TAB_DELAY секунд. Хук PreToolUse синхронный, Claude Code ждет его, поэтому
+    ожидание уходит в отдельный процесс."""
+    try:
+        child = subprocess.Popen([sys.executable, os.path.abspath(__file__), "buildlog-tab"], stdin=subprocess.PIPE,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        child.stdin.write(json.dumps(payload).encode())
+        child.stdin.close()
+    except OSError:
+        pass
+
+
+def tab_child():
+    try:
+        payload = json.load(sys.stdin)
+        target = iterm_target()
+        if isinstance(payload, dict) and target:
+            tab_hook(payload, target)
+    except (ValueError, OSError):
+        pass
+    return 0
+
+
 def hook():
     try:
         payload = json.load(sys.stdin)
     except ValueError:
         return 0
     if not isinstance(payload, dict) or not enabled():
+        return 0
+    if payload.get("hook_event_name") == "PreToolUse":
+        inp = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
+        if iterm_target() and tab_label(str(inp.get("command") or "")):
+            spawn_tab(payload)
+        try:
+            new = pre_decide(payload)
+        except Exception:
+            return 0
+        if new:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": new}},
+                             ensure_ascii=False))
         return 0
     target = iterm_target()
     if target:
@@ -382,8 +457,8 @@ def usage():
     print(f"Хук PostToolUse сжимает длинный вывод (больше {MAX_LINES} строк или {MAX_BYTES // 1024} КБ) Gradle, "
           "xcodebuild,")
     print("swift build/test, npm/pnpm/yarn test и build, pytest и make: Claude видит ошибки, предупреждения и итог,")
-    print(f"а полный лог лежит в {tilde(LOGS)}/<сессия>/ ({KEEP_DAYS} дней). Только для команд с кодом 0:")
-    print("вывод упавшей команды Claude Code заменить не дает.")
+    print(f"а полный лог лежит в {tilde(LOGS)}/<сессия>/ ({KEEP_DAYS} дней). Чтобы сжать и вывод упавшей сборки,")
+    print("хук PreToolUse дописывает к ней || echo с меткой: Claude узнает, что сборка упала, но не код возврата.")
     print(f"В iTerm2 сборка дольше {TAB_DELAY:g} с подписана во вкладке рядом со статусом Claude: gradlew :app:assembleDebug.")
 
 
@@ -391,6 +466,8 @@ def main():
     args = sys.argv[1:]
     if args[:1] == ["buildlog-hook"]:
         return hook()
+    if args[:1] == ["buildlog-tab"]:
+        return tab_child()
     rest = args[1:]
     if not rest:
         print(f"claudemeister buildlog: {'включён' if enabled() else 'выключен'}. Логи: {tilde(LOGS)}")
