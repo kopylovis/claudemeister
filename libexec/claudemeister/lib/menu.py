@@ -23,6 +23,15 @@ class Cancel(Exception):
     pass
 
 
+def tr(ru, en):
+    """Строка на языке интерфейса claudemeister; без mnrhlib рядом по-русски."""
+    try:
+        from mnrhlib import tr as translate
+        return translate(ru, en)
+    except Exception:
+        return ru
+
+
 def cut(text, width):
     out, seen, i = [], 0, 0
     while i < len(text) and seen < width:
@@ -39,7 +48,7 @@ def cut(text, width):
 
 class Menu:
     marks = None
-    esc = "выход"
+    esc = None
 
     def __init__(self, tty_fd, items, title, label, start, default):
         self.fd = tty_fd
@@ -103,7 +112,7 @@ class Menu:
         self.top = max(0, min(self.top, max(0, len(view) - room)))
         shown = view[self.top:self.top + room]
         if self.top:
-            lines.append(f"\x1b[2m     ↑ ещё {self.top}\x1b[0m")
+            lines.append(f"\x1b[2m     ↑ {tr('ещё', 'more')} {self.top}\x1b[0m")
         for i in shown:
             if self.items[i][0] is None:
                 lines.append(cut(f"  \x1b[{SUBTITLE}m{self.items[i][1]}\x1b[0m", cols - 1))
@@ -122,15 +131,20 @@ class Menu:
                 lines.append("  " + cut(f"{num}{box}{body}", cols - 3))
         rest = len(view) - self.top - len(shown)
         if rest > 0:
-            lines.append(f"\x1b[2m     ↓ ещё {rest}\x1b[0m")
+            lines.append(f"\x1b[2m     ↓ {tr('ещё', 'more')} {rest}\x1b[0m")
         if not self.choices(view):
-            lines.append("\x1b[2m  ничего не найдено\x1b[0m")
-        hint = f"↑↓ выбрать · Enter · цифра или буквы — быстрый переход · Esc — {self.esc}"
+            lines.append(f"\x1b[2m  {tr('ничего не найдено', 'nothing found')}\x1b[0m")
+        esc = self.esc or tr("выход", "quit")
+        hint = tr(f"↑↓ выбрать · Enter · цифра или буквы — быстрый переход · Esc — {esc}",
+                  f"↑↓ move · Enter · a number or letters to jump · Esc to {esc}")
         if self.marks is not None:
-            total = self.summary(self.marks) if self.summary else f"отмечено {len(self.marks)}"
-            hint = f"{total} · Пробел — отметить · a — все/ничего · Enter — дальше · Esc — отмена"
+            total = self.summary(self.marks) if self.summary else tr(f"отмечено {len(self.marks)}",
+                                                                      f"{len(self.marks)} marked")
+            hint = tr(f"{total} · Пробел — отметить · a — все/ничего · Enter — дальше · Esc — отмена",
+                      f"{total} · Space to mark · a for all/none · Enter to go on · Esc to cancel")
         if self.query:
-            hint = f"поиск: {self.query}▏ · Backspace стереть · Esc сбросить"
+            hint = tr(f"поиск: {self.query}▏ · Backspace стереть · Esc сбросить",
+                      f"search: {self.query}▏ · Backspace to erase · Esc to clear")
         lines.append("")
         lines.append(f"\x1b[2m{hint[: cols - 1]}\x1b[0m")
         self.clear()
@@ -249,7 +263,7 @@ def pick(items, title="", label="", start=1, default=0, marked=None, summary=Non
     return choice
 
 
-def choice(question, options, default=0, back=None, esc="назад"):
+def choice(question, options, default=0, back=None, esc=None):
     fd = os.open("/dev/tty", os.O_RDWR)
     saved = termios.tcgetattr(fd)
     sel = min(max(default, 0), len(options) - 1)
@@ -263,7 +277,7 @@ def choice(question, options, default=0, back=None, esc="назад"):
         for i, opt in enumerate(options):
             label = f" {opt[1]} "
             parts.append(f"\x1b[1;30;46m{label}\x1b[0m" if i == sel else f"\x1b[2m{label}\x1b[0m")
-        hint = f"\x1b[2m  ←→ · Enter · Esc — {esc}\x1b[0m"
+        hint = f"\x1b[2m  ←→ · Enter · Esc — {esc or tr('назад', 'back')}\x1b[0m"
         os.write(fd, f"\r\x1b[K\x1b[1;34m{question}\x1b[0m  {'  '.join(parts)}{hint}".encode())
 
     result = back

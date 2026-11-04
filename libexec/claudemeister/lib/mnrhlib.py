@@ -130,6 +130,18 @@ def system_english():
     return _english
 
 
+def lang():
+    """Язык интерфейса: lang=ru или lang=en в ~/.config/mnrh/config, иначе первый язык macOS."""
+    value = read_config().get("lang", "").lower()
+    if value in ("ru", "en"):
+        return value
+    return "en" if system_english() else "ru"
+
+
+def tr(ru, en):
+    return en if lang() == "en" else ru
+
+
 def settings_name(key):
     names = SETTINGS_NAMES.get(key)
     return (names[1] if system_english() else names[0]) if names else key

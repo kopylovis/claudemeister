@@ -48,7 +48,7 @@ claudemeister notify                уведомления, когда Claude ж
 claudemeister ps                    открытые сессии Claude Code: кто ждет тебя, перейти во вкладку
 claudemeister restore               открыть заново сессии, открытые до перезагрузки или падения
 claudemeister doctor                проверить установку: команды, хуки, MCP, уведомления, promptsill, прокси
-claudemeister lid                   не засыпать с закрытой крышкой в caffeinate-сессиях: setup, remove, off
+claudemeister lid                   не засыпать с закрытой крышкой в caffeinate-сессиях: on, off, setup, remove
 claudemeister setup                 поставить /restart, хуки, MCP-сервер, хук zsh, прокси и promptsill
                                     (--country KZ для прокси, --remove убрать; подробнее: setup -h)
 claudemeister --version             версия

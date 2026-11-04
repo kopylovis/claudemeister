@@ -169,11 +169,13 @@ def check_proxy():
 
 def check_lid():
     import claude_lid
+    if not claude_lid.switched_on():
+        return [("ok", "крышка: выключено, закрытая крышка усыпит Mac (claudemeister lid on)")]
     if claude_lid.ready():
         return [("ok", f"крышка: caffeinate-сессии не уснут и с закрытой крышкой (на батарее до "
                        f"{claude_lid.LOW_BATTERY}% заряда)")]
     if claude_lid.disabled() and not claude_lid.watcher_pid():
-        return [("warn", "сон отключен (pmset disablesleep 1), а сторожа нет: claudemeister lid off")]
+        return [("warn", "сон отключен (pmset disablesleep 1), а сторожа нет: claudemeister lid release")]
     return [("ok", "крышка: закрытая крышка усыпит Mac и в caffeinate-сессии (claudemeister lid setup)")]
 
 

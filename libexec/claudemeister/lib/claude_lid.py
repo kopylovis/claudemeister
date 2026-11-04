@@ -17,7 +17,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mnrhlib import HOME, run, tilde
+from mnrhlib import HOME, read_config, run, tilde, write_config
 
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "mnrh")
 PIDFILE = os.path.join(STATE, "lid.pid")
@@ -126,9 +126,19 @@ def watch():
             pass
 
 
+def switched_on():
+    """Не выключено ли командой claudemeister lid off (строка lid=off в конфиге)."""
+    return read_config().get("lid", "on") != "off"
+
+
+def active():
+    """Крышка не усыпляет caffeinate-сессии: правило есть и режим не выключен."""
+    return switched_on() and ready()
+
+
 def keep():
-    """Запустить сторожа, если правило есть и он ещё не идёт. Тихо ничего не делает без правила."""
-    if watcher_pid() or not ready():
+    """Запустить сторожа, если правило есть, режим включен и сторож ещё не идёт. Иначе тихо ничего не делает."""
+    if watcher_pid() or not switched_on() or not ready():
         return False
     subprocess.Popen([sys.executable, os.path.abspath(__file__), "watch"], stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, cwd="/")
@@ -172,6 +182,9 @@ def remove():
 
 def status_lines():
     lines = []
+    if not switched_on():
+        lines.append("Крышка: выключено, закрытая крышка усыпит Mac и в caffeinate-сессии. Включить: claudemeister lid on")
+        return lines
     if not ready():
         lines.append("Крышка: закрытая крышка на батарее усыпит Mac и в caffeinate-сессии. "
                      "Чтобы не усыпляла: claudemeister lid setup")
@@ -179,7 +192,7 @@ def status_lines():
     n = len(sessions())
     if disabled():
         lines.append(f"Крышка: Mac не уснёт и с закрытой крышкой, caffeinate-сессий Claude {n}"
-                     + (f", сторож pid {watcher_pid()}" if watcher_pid() else ", сторожа нет: claudemeister lid off"))
+                     + (f", сторож pid {watcher_pid()}" if watcher_pid() else ", сторожа нет: claudemeister lid release"))
     else:
         lines.append("Крышка: правило есть, сейчас не держу" + (f" (сессий {n}, сторож их подхватит)" if n else ""))
     return lines
@@ -191,8 +204,9 @@ def main(args):
         print("claudemeister lid           держит ли сейчас крышка Mac от сна")
         print("claudemeister lid setup     правило sudoers для pmset: caffeinate-сессии Claude не уснут и с закрытой")
         print(f"                            крышкой на батарее (до {LOW_BATTERY}% заряда)")
-        print("claudemeister lid remove    убрать правило")
-        print("claudemeister lid off       отпустить сейчас")
+        print("claudemeister lid on | off  включить или выключить (on без правила сначала поставит его)")
+        print("claudemeister lid release   отпустить сейчас, до следующей caffeinate-сессии")
+        print("claudemeister lid remove    выключить и убрать правило")
         return 0
     if cmd == "watch":
         watch()
@@ -202,9 +216,20 @@ def main(args):
         setup()
     elif cmd == "remove":
         remove()
+    elif cmd == "on":
+        write_config(lid="on")
+        if not ready():
+            setup()
+        if sessions():
+            keep()  # сессии уже идут: держать их сейчас, а не со следующей
+        print("Включено: caffeinate-сессии Claude не уснут и с закрытой крышкой.")
     elif cmd == "off":
+        write_config(lid="off")
         release()
-        print("Отпустил: крышка снова усыпляет Mac.")
+        print("Выключено: крышка снова усыпляет Mac. Правило sudoers осталось, claudemeister lid on вернет режим.")
+    elif cmd == "release":
+        release()
+        print("Отпустил: крышка снова усыпляет Mac, до следующей caffeinate-сессии.")
     elif cmd == "status":
         print("\n".join(status_lines()))
         if os.path.exists(LOG):
