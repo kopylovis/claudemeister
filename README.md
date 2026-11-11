@@ -37,7 +37,7 @@ claudemeister notify         tell you when Claude is waiting; telegram, phone
 claudemeister lid            stay awake with the lid closed; setup, remove
 
 # Proxy through your VPS
-claudemeister proxy          status; setup, test, update, remove
+claudemeister proxy          status; setup, test, update, restart, remove
 
 # Project tools, Claude also calls them through MCP and slash commands
 claudemeister brief          where we left off: git, last session, backlog
@@ -183,6 +183,14 @@ newer one. That command runs `brew upgrade mihomo`. If mihomo is running with no
 and the new version starts with the next session. If sessions are running, it asks whether to restart mihomo
 now. Requests in flight at that moment break and Claude Code retries them. Without a restart the new version
 takes over after the last session.
+
+While mihomo runs, a network watcher runs next to it. Every 10 seconds it looks at the default route and the
+VPS group. When the network comes back on another interface (Wi-Fi instead of Ethernet, a hotspot), it writes
+the new interface into the config and reloads mihomo. When the group sits on REJECT after a drop, it asks mihomo
+to check the server right away instead of waiting for the five-minute check. When the server stays unreachable
+for 30 seconds while the network is up, it restarts mihomo, at most once every five minutes. Its log is
+`~/.local/state/mnrh/proxy/watch.log`. `claudemeister proxy restart` restarts mihomo by hand and keeps the
+proxied sessions open.
 
 mihomo listens on `127.0.0.1:17890`, starts with the first proxied session and stops after the last. The
 session gets `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, and `NO_PROXY` for localhost. `/restart` and the windows

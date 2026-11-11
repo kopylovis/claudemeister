@@ -36,6 +36,11 @@ EXIT = os.path.join(STATE, "exit.json")
 SOCK = os.path.join(STATE, "mihomo.sock")
 # страница с подробностями о выходе: на нее ведет метка proxy в promptsill, если терминал умеет ссылки
 PAGE = os.path.join(STATE, "exit.html")
+WATCH_PID = os.path.join(STATE, "watch.pid")
+WATCH_LOG = os.path.join(STATE, "watch.log")
+WATCH_POLL = 10       # как часто сторож смотрит на сеть и на группу VPS
+RESTART_AFTER = 30    # столько секунд группа может стоять на REJECT при живой сети, потом перезапуск mihomo
+RESTART_GAP = 300     # если сервер и правда лежит, перезапускать не чаще раза в пять минут
 SUB_URL = os.path.join(CONF_DIR, "subscription.url")
 SUB_FILE = os.path.join(CONF_DIR, "subscription.txt")
 DEFAULT_PORT = 17890
@@ -164,12 +169,27 @@ class locked:
         self.f.close()
 
 
-def physical_interface():
-    """Интерфейс маршрута по умолчанию. VPN вроде Happ в режиме TUN ставят свои маршруты 0/1 и 128.0/1,
-    а default оставляют на Wi-Fi или Ethernet: его и берём, чтобы ходить к серверу мимо их туннеля."""
+def default_route():
+    """Интерфейс маршрута по умолчанию или None, если сети нет."""
     out = subprocess.run(["route", "-n", "get", "default"], capture_output=True, text=True).stdout
     m = re.search(r"interface:\s*(\S+)", out)
-    return m.group(1) if m and not m.group(1).startswith("utun") else None
+    return m.group(1) if m else None
+
+
+def physical_interface(route=None):
+    """Интерфейс маршрута по умолчанию. VPN вроде Happ в режиме TUN ставят свои маршруты 0/1 и 128.0/1,
+    а default оставляют на Wi-Fi или Ethernet: его и берём, чтобы ходить к серверу мимо их туннеля."""
+    route = default_route() if route is None else route
+    return route if route and not route.startswith("utun") else None
+
+
+def pinned_interface():
+    try:
+        with open(CONFIG) as f:
+            m = re.search(r"(?m)^interface-name:\s*(\S+)", f.read())
+    except OSError:
+        return None
+    return m.group(1) if m else None
 
 
 def set_line(text, key, line):
@@ -254,9 +274,11 @@ def pin_hosts():
         os.replace(CONFIG + ".tmp", CONFIG)
 
 
-def mihomo_api(path):
-    r = subprocess.run(["curl", "-s", "--noproxy", "*", "--max-time", "2", "--unix-socket", SOCK,
-                        "http://mihomo" + path], capture_output=True, text=True)
+def mihomo_api(path, method="GET", body=None, timeout=2):
+    cmd = ["curl", "-s", "--noproxy", "*", "--max-time", str(timeout), "--unix-socket", SOCK, "-X", method]
+    if body is not None:
+        cmd += ["-H", "Content-Type: application/json", "--data", json.dumps(body)]
+    r = subprocess.run(cmd + ["http://mihomo" + path], capture_output=True, text=True)
     try:
         data = json.loads(r.stdout)
     except ValueError:
@@ -409,6 +431,97 @@ def stop():
     return pid is not None
 
 
+def watch_step(state, now, route, pinned, group):
+    """Одно решение сторожа. state: dict с reject_since и restarted_at, меняется на месте. route: интерфейс
+    маршрута по умолчанию или None без сети, pinned: interface-name в конфиге, group: кто сейчас в группе VPS.
+    Возвращает список действий: repin, healthcheck, restart."""
+    if route is None:
+        state["reject_since"] = None  # сети нет: ждать нечего, сервер честно недоступен
+        return []
+    if physical_interface(route) != pinned:
+        state["reject_since"] = None
+        return ["repin", "healthcheck"]
+    if group != "REJECT":
+        state["reject_since"] = None
+        return []
+    if state.get("reject_since") is None:
+        state["reject_since"] = now
+        return ["healthcheck"]
+    restarted = state.get("restarted_at")
+    if now - state["reject_since"] >= RESTART_AFTER and (restarted is None or now - restarted >= RESTART_GAP):
+        state["reject_since"], state["restarted_at"] = None, now
+        return ["restart"]
+    return []
+
+
+def watch_log(text):
+    try:
+        with open(WATCH_LOG, "a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + text + "\n")
+    except OSError:
+        pass
+
+
+def restart_mihomo():
+    """Перезапустить mihomo на месте: сессии через VPS остаются, их текущие запросы обрываются. Под locked()."""
+    stop()
+    start()
+
+
+def watch():
+    """Сторож, пока mihomo запущен. mihomo сам не узнает, что сеть вернулась через другой интерфейс, а мертвый
+    сервер перепроверяет раз в пять минут, и все это время группа VPS отклоняет запросы."""
+    with open(WATCH_PID, "w") as f:
+        f.write(str(os.getpid()))
+    state = {}
+    watch_log("сторож запущен")
+    try:
+        while True:
+            time.sleep(WATCH_POLL)
+            if not (read_pid() and listening(port())):
+                break  # mihomo остановлен после последней сессии
+            route = default_route()
+            group = mihomo_api("/proxies/VPS").get("now") if route else None
+            for action in watch_step(state, time.time(), route, pinned_interface(), group):
+                try:
+                    if action == "repin":
+                        with locked():
+                            old = pinned_interface()
+                            pin_config()
+                            mihomo_api("/configs?force=true", "PUT", {"path": CONFIG}, timeout=10)
+                        watch_log(f"интерфейс {old} -> {pinned_interface()}, конфиг mihomo перезагружен")
+                    elif action == "healthcheck":
+                        mihomo_api("/providers/proxies/vps/healthcheck", timeout=10)
+                    elif action == "restart":
+                        watch_log(f"сеть есть, а сервер недоступен {RESTART_AFTER} с, перезапускаю mihomo")
+                        with locked():
+                            restart_mihomo()
+                except (ProxyError, OSError) as e:
+                    watch_log(f"{action}: {e}")
+    finally:
+        watch_log("сторож остановлен")
+        try:
+            os.remove(WATCH_PID)
+        except OSError:
+            pass
+
+
+def watcher_alive():
+    try:
+        with open(WATCH_PID) as f:
+            return alive(int(f.read().strip()))
+    except (OSError, ValueError):
+        return False
+
+
+def ensure_watch():
+    """Запустить сторожа, если его еще нет. Под locked(), после start()."""
+    if watcher_alive():
+        return
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "watch"], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True, cwd="/")
+
+
 def proxy_env(p):
     url = f"http://127.0.0.1:{p}"
     env = dict(os.environ)
@@ -450,6 +563,7 @@ def run(cmd):
         except ProxyError as e:
             print(f"claudemeister proxy: {e}", file=sys.stderr)
             return 1
+        ensure_watch()
         os.makedirs(HOLDERS, exist_ok=True)
         mark = os.path.join(HOLDERS, str(os.getpid()))
         open(mark, "w").close()
@@ -704,9 +818,26 @@ def update():
         with locked():
             stop()
             start()
+            ensure_watch()
         print(f"{OK} mihomo перезапущен, работает {running_version() or after}")
     else:
         print(f"{OK} mihomo {running} работает, пока идут сессии через VPS. {after} заработает после последней")
+    return 0
+
+
+def restart_cmd():
+    if not (read_pid() and listening(port())):
+        print(paint("  mihomo не запущен: он поднимется вместе с первой сессией через VPS", "2"))
+        return 0
+    try:
+        with locked():
+            restart_mihomo()
+            ensure_watch()
+    except ProxyError as e:
+        print(f"{BAD} {e}")
+        return 1
+    node, proto = active_node()
+    print(f"{OK} mihomo перезапущен" + (f", сервер {node}" + (f", протокол {proto}" if proto else "") if node else ""))
     return 0
 
 
@@ -729,6 +860,8 @@ def status(test=False):
             print(f"{WARN if 'proxy update' in line or 'Запущен еще' in line else OK} {line}")
     if pid and listening(p):
         print(f"{OK} mihomo работает (pid {pid}), сессий через VPS {len(live)}")
+        print(f"{OK} сторож сети работает" if watcher_alive() else
+              f"{WARN} сторожа сети нет, он запустится с новой сессией через VPS или claudemeister proxy restart")
         node, proto = active_node()
         if node:
             print(f"{OK} сейчас сервер {node}" + (f", протокол {proto}" if proto else ""))
@@ -783,6 +916,7 @@ claudemeister proxy setup [ссылка] [--country KZ] [--only KZ]
                                   --country: если выход окажется в другой стране, сессия не запустится;
                                   --only: брать из подписки только серверы, чьё имя подходит под это выражение
 claudemeister proxy update          обновить mihomo через Homebrew и перезапустить, если он запущен
+claudemeister proxy restart         перезапустить mihomo, не закрывая сессии через VPS
 claudemeister proxy remove          удалить настройку
 claudemeister proxy run -- <cmd>    запустить команду через VPS (так делает claudemeister -x)
 
@@ -811,6 +945,11 @@ def main(argv):
         return remove()
     if cmd == "update":
         return update()
+    if cmd == "restart":
+        return restart_cmd()
+    if cmd == "watch":
+        watch()
+        return 0
     if cmd == "run":
         return run(rest[1:] if rest[:1] == ["--"] else rest)
     if cmd == "configured":

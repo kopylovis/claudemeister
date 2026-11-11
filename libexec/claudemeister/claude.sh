@@ -45,7 +45,7 @@ help() {
   claudemeister lid                 не засыпать с закрытой крышкой; setup, release, remove
 
 Прокси через свой VPS
-  claudemeister proxy               состояние; setup, test, update, remove (proxy -h)
+  claudemeister proxy               состояние; setup, test, update, restart, remove (proxy -h)
 
 Инструменты проекта (Claude зовет их и сам)
   claudemeister brief               где мы остановились: git, прошлая сессия, бэклог (/where)
