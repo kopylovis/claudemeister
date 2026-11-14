@@ -60,6 +60,8 @@ brew install kopylovis/tap/claudemeister
 claudemeister setup
 ```
 
+The formula also installs `cm`, a short name for `claudemeister`. `cm kcalm`, `cm ps` and `cm proxy` work the same.
+
 Homebrew also installs mihomo for `claudemeister -x`. `claudemeister setup` puts `/restart`, `/forget`, `/slim`
 and the other commands into `~/.claude/commands`, hooks into `~/.claude/settings.json` and a zsh hook into
 `~/.zshrc`, and registers the `claudemeister` MCP server. If the VPS proxy isn't set up yet, setup asks whether
@@ -104,6 +106,7 @@ claudemeister setup
 ```
 
 `make install` puts a symlink to the checkout into `~/.local/bin`, so edits take effect without reinstalling.
+It adds `cm` next to it unless `~/.local/bin/cm` already belongs to another program.
 `make uninstall` removes it, `make test` runs the checks.
 
 ### Releasing

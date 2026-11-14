@@ -58,6 +58,8 @@ brew install kopylovis/tap/claudemeister
 claudemeister setup
 ```
 
+Формула ставит и `cm`, короткое имя для `claudemeister`. `cm kcalm`, `cm ps`, `cm proxy` работают так же.
+
 Homebrew ставит заодно mihomo для `claudemeister -x`. `claudemeister setup` кладёт команды `/restart`,
 `/forget`, `/slim` и другие в `~/.claude/commands`, хуки в `~/.claude/settings.json`, хук zsh в `~/.zshrc`
 и регистрирует MCP-сервер `claudemeister`. Если прокси через VPS еще не настроен, setup спрашивает, настроить
@@ -102,7 +104,7 @@ claudemeister setup
 ```
 
 `make install` кладёт в `~/.local/bin` символическую ссылку на проект, поэтому правки работают без
-переустановки. Удаление: `make uninstall`. Проверки: `make test`.
+переустановки. Рядом появляется `cm`, если `~/.local/bin/cm` не занят другой программой. Удаление: `make uninstall`. Проверки: `make test`.
 
 ### Выпуск новой версии
 

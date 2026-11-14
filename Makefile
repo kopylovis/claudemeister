@@ -7,9 +7,13 @@ install:
 	@mkdir -p "$(BIN)"
 	@ln -sfn "$(CURDIR)/bin/claudemeister" "$(BIN)/claudemeister"
 	@echo "claudemeister -> $(BIN)/claudemeister (symlink на проект, правки работают сразу)"
+	@if [ ! -e "$(BIN)/cm" ] || [ "$$(readlink "$(BIN)/cm")" = "$(CURDIR)/bin/claudemeister" ]; then \
+		ln -sfn "$(CURDIR)/bin/claudemeister" "$(BIN)/cm" && echo "cm -> $(BIN)/cm (короткое имя)"; \
+	else echo "$(BIN)/cm уже занят другой программой, короткое имя не поставлено"; fi
 
 uninstall:
 	@rm -f "$(BIN)/claudemeister"
+	@if [ "$$(readlink "$(BIN)/cm")" = "$(CURDIR)/bin/claudemeister" ]; then rm -f "$(BIN)/cm"; fi
 	@echo "claudemeister удалён из $(BIN)"
 
 test:
